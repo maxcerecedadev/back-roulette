@@ -1,0 +1,26 @@
+{
+  "name": "roulette-back",
+  "version": "1.0.0",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon server.js",
+    "start": "node server.js",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "dotenv": "^17.2.1",
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.33.0",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.9",
+    "@types/socket.io": "^3.0.2",
+    "eslint": "^9.33.0",
+    "eslint-plugin-node": "^11.1.0",
+    "globals": "^16.3.0",
+    "nodemon": "^3.1.4"
+  }
+}
