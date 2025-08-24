@@ -25,7 +25,7 @@ const singlePlayerRooms = new Map();
 app.use("/api/v1", gameRoutes);
 
 io.on("connection", (socket) => {
-  console.log(`✅ Nuevo jugador conectado. ID: ${socket.id}`);
+  console.log(`✅ Nuevo jugador conectado a la sala: ${socket.id}`);
 
   singlePlayerHandler(io, socket, singlePlayerRooms);
 });

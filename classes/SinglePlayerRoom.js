@@ -9,6 +9,7 @@ const GAME_STATES = {
 
 export class SinglePlayerRoom {
   constructor(io, roomId) {
+    console.log(`[Constructor] Creando nueva sala ${roomId}`);
     this.server = io;
     this.id = roomId;
     this.players = new Map();
@@ -16,23 +17,35 @@ export class SinglePlayerRoom {
     this.lastBets = new Map();
     this.gameState = GAME_STATES.BETTING;
     this.timeRemaining = 20;
-    this.rouletteEngine = new RouletteEngine(20); // cola siempre con 20 resultados
+    this.rouletteEngine = new RouletteEngine(20);
     this.winningNumber = null;
     this.lastWinningNumber = null;
 
     this.startCountdown();
   }
-
   broadcast(event, data) {
     this.server.to(this.id).emit(event, data);
   }
 
-  addPlayer(player) {
+  addPlayer(player, socket) {
     if (this.players.size >= 1) {
       throw new Error("Esta sala es solo para un jugador.");
     }
+
+    // Añadir socketId a la instancia de User
+    player.socketId = socket.id;
+
+    // Guardar la instancia completa en el Map
     this.players.set(player.id, player);
-    console.log(`🟢 Jugador ${player.name} se unió a la sala ${this.id}`);
+
+    console.log(
+      `🟢 Jugador ${player.name} (${player.id}) se unió. Balance: ${player.balance}`
+    );
+
+    // Emitir solo al socket del jugador
+    this.server.to(socket.id).emit("player-initialized", player.toSocketData());
+
+    // Actualizar estado a todos los que estén en la sala
     this.broadcast("game-state-update", {
       state: this.gameState,
       time: this.timeRemaining,
@@ -62,14 +75,14 @@ export class SinglePlayerRoom {
   }
 
   nextState() {
+    console.log(`[nextState] Transicionando del estado: ${this.gameState}`);
     this.stopCountdown();
     if (this.gameState === GAME_STATES.BETTING) {
       this.gameState = GAME_STATES.SPINNING;
-      this.broadcast("game-state-update", { state: this.gameState });
       this.spinWheel();
     } else if (this.gameState === GAME_STATES.SPINNING) {
       this.gameState = GAME_STATES.PAYOUT;
-      this.processPayout();
+      this.processPayout(this.winningNumber);
     } else if (this.gameState === GAME_STATES.PAYOUT) {
       this.gameState = GAME_STATES.BETTING;
       this.timeRemaining = 20;
@@ -77,63 +90,105 @@ export class SinglePlayerRoom {
         state: this.gameState,
         time: this.timeRemaining,
       });
+      this.winningNumber = null;
       this.startCountdown();
     }
   }
 
   spinWheel() {
     this.winningNumber = this.rouletteEngine.getNextWinningNumber();
-    setTimeout(() => this.nextState(), 5000);
-  }
-
-  processPayout() {
-    const winningNum = this.winningNumber;
-    const playerId = this.players.keys().next().value;
-    const player = this.players.get(playerId);
-
-    let totalWinnings = 0;
-    const betResults = [];
-
-    if (this.bets.has(playerId)) {
-      const playerBets = this.bets.get(playerId);
-      this.lastBets.set(playerId, new Map(playerBets));
-      playerBets.forEach((amount, betKey) => {
-        const payoutMultiplier = this.rouletteEngine.getBetResult(
-          winningNum,
-          betKey
-        );
-        const wonAmount = amount * payoutMultiplier;
-        if (wonAmount > 0) totalWinnings += wonAmount;
-        betResults.push({ betKey, amount, payoutMultiplier, wonAmount });
-      });
-    }
-
-    if (totalWinnings > 0) player.updateBalance(totalWinnings);
-
-    this.lastWinningNumber = this.winningNumber;
-    this.bets.clear();
+    console.log(
+      `🎡 [spinWheel] Número ganador generado: ${this.winningNumber.number} (${this.winningNumber.color})`
+    ); // AHORA se emite el estado con el número ganador
 
     this.broadcast("game-state-update", {
       state: this.gameState,
       winningNumber: this.winningNumber.number,
-      color: this.winningNumber.color,
-      totalWinnings,
-      newBalance: player.balance,
-      betResults,
+      winningColor: this.winningNumber.color,
+    });
+
+    console.log(
+      `[spinWheel] Emisión enviada. Se pasará al estado PAYOUT en 6 segundos.`
+    ); // Pasar al siguiente estado después de que la animación termine
+
+    setTimeout(() => {
+      console.log(`[Timeout] 6 segundos pasaron. Llamando a nextState().`);
+      this.nextState();
+    }, 6000); // 6s = duración de la animación en front
+  }
+
+  processPayout(winningNumber) {
+    console.log(
+      `\n🏆 [processPayout] Iniciando proceso de pago. Número ganador: ${winningNumber.number}`
+    );
+
+    this.players.forEach((player, playerId) => {
+      let totalWin = 0;
+      const playerBets = this.bets.get(playerId) || new Map();
+      const didPlayerBet = playerBets.size > 0;
+
+      playerBets.forEach((betAmount, betKey) => {
+        const multiplier = this.rouletteEngine.getBetResult(
+          winningNumber,
+          betKey
+        );
+        const won = betAmount * multiplier;
+        totalWin += won;
+      });
+
+      // Agrega las ganancias al balance del jugador
+      if (totalWin > 0) {
+        player.updateBalance(totalWin);
+      }
+
+      // <-- Lógica para determinar el estado del resultado
+      let resultStatus = "no_bet"; // Valor por defecto
+      if (didPlayerBet) {
+        if (totalWin > 0) {
+          resultStatus = "win";
+        } else {
+          resultStatus = "lose";
+        }
+      }
+
+      console.log(
+        `[processPayout] Jugador ${player.name}. Total Ganado: ${totalWin}. Nuevo Balance: ${player.balance}. Estado: ${resultStatus}`
+      );
+
+      const payload = {
+        state: GAME_STATES.PAYOUT,
+        winningNumber: winningNumber.number,
+        winningColor: winningNumber.color,
+        totalWinnings: totalWin,
+        newBalance: player.balance,
+        resultStatus: resultStatus, // <-- Nuevo campo emitido
+      };
+
+      console.log(
+        `[processPayout] Enviando payload a jugador ${playerId}: `,
+        JSON.stringify(payload)
+      );
+      this.server.to(player.socketId).emit("game-state-update", payload);
+
+      this.bets.set(playerId, new Map());
     });
 
     setTimeout(() => {
-      this.gameState = GAME_STATES.BETTING;
-      this.timeRemaining = 20;
-      this.broadcast("game-state-update", {
-        state: this.gameState,
-        time: this.timeRemaining,
-      });
-      this.startCountdown();
-    }, 8000);
+      this.nextState();
+    }, 5000);
   }
 
   placeBet(playerId, betKey, amount) {
+    console.log(
+      `[SinglePlayerRoom] placeBet llamado: ${playerId}, ${betKey}, ${amount}`
+    );
+    console.log(
+      "[DEBUG] placeBet playerId:",
+      playerId,
+      "players.keys():",
+      Array.from(this.players.keys())
+    );
+
     if (this.gameState !== GAME_STATES.BETTING) return;
     const player = this.players.get(playerId);
     if (!player || player.balance < amount) return;
@@ -144,19 +199,21 @@ export class SinglePlayerRoom {
     playerBets.set(betKey, currentAmount + amount);
     player.balance -= amount;
 
+    console.log(
+      `🟢 [placeBet] Jugador ${player.name} apostó ${amount} a ${betKey}. Nuevo balance: ${player.balance}`
+    );
+
     const betsArray = Array.from(playerBets, ([key, val]) => ({
       betKey: key,
       amount: val,
     }));
     const totalBet = betsArray.reduce((sum, bet) => sum + bet.amount, 0);
 
-    this.server
-      .to(playerId)
-      .emit("bet-placed", {
-        newBalance: player.balance,
-        bets: betsArray,
-        totalBet,
-      });
+    this.server.to(playerId).emit("bet-placed", {
+      newBalance: player.balance,
+      bets: betsArray,
+      totalBet,
+    });
   }
 
   clearBets(playerId) {
@@ -189,12 +246,10 @@ export class SinglePlayerRoom {
     const player = this.players.get(playerId);
     player.updateBalance(amount);
 
-    this.server
-      .to(playerId)
-      .emit("bet-undone", {
-        newBalance: player.balance,
-        removedBet: { betKey, amount },
-      });
+    this.server.to(playerId).emit("bet-undone", {
+      newBalance: player.balance,
+      removedBet: { betKey, amount },
+    });
   }
 
   repeatBet(playerId) {

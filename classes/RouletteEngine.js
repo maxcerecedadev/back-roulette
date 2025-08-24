@@ -87,108 +87,105 @@ export class RouletteEngine {
    * @returns {number} El multiplicador de pago (pago + apuesta original).
    */
   getBetResult(winningNumber, betKey) {
-    const winningNum = winningNumber.number;
-    const betParts = betKey.split("_");
+    const winningNum = Number(winningNumber.number);
+    const betParts = betKey.trim().split("_");
     const betType = betParts[0];
 
-    // Para cualquier apuesta, si el número ganador es 0, las apuestas perimetrales pierden.
+    // 0 pierde en apuestas perimetrales
     if (
       winningNum === 0 &&
-      (betType === "even_money" || betType === "dozen" || betType === "column")
+      ["even_money", "dozen", "column", "2:1"].includes(betType)
     ) {
       return 0;
     }
 
     switch (betType) {
-      // Apuesta directa: paga 35:1
-      case "straight":
-        if (parseInt(betParts[1]) === winningNum) {
-          return 36;
-        }
+      case "straight": {
+        const straightNum = Number(betParts[1]);
+        if (straightNum === winningNum) return 35; // 35:1
         break;
+      }
 
-      // Apuesta dividida: paga 17:1
       case "split": {
         const splitNums = betParts.slice(1).map(Number);
-        if (splitNums.includes(winningNum)) {
-          return 18;
-        }
+        if (splitNums.includes(winningNum)) return 17; // 17:1
         break;
       }
 
-      // Apuesta a trío: paga 11:1
       case "trio": {
         const trioNums = betParts.slice(1).map(Number);
-        if (trioNums.includes(winningNum)) {
-          return 12;
-        }
+        if (trioNums.includes(winningNum)) return 11; // 11:1
         break;
       }
 
-      // Apuesta de calle: paga 11:1
       case "street": {
-        const streetStart = parseInt(betParts[1]);
-        const streetEnd = streetStart + 2;
-        if (winningNum >= streetStart && winningNum <= streetEnd) {
-          return 12;
-        }
+        const start = Number(betParts[1]);
+        if (winningNum >= start && winningNum <= start + 2) return 11; // 11:1
         break;
       }
 
-      // Apuesta de esquina: paga 8:1
       case "corner": {
         const cornerNums = betParts.slice(1).map(Number);
-        if (cornerNums.includes(winningNum)) {
-          return 9;
-        }
+        if (cornerNums.includes(winningNum)) return 8; // 8:1
         break;
       }
 
-      // Apuesta de línea: paga 5:1
       case "line": {
         const lineNums = betParts.slice(1).map(Number);
-        if (winningNum >= lineNums[0] && winningNum <= lineNums[1] + 5) {
-          return 6;
-        }
+        if (winningNum >= lineNums[0] && winningNum <= lineNums[1] + 5)
+          return 5; // 5:1
         break;
       }
 
-      // Apuesta de columna: paga 2:1
       case "column": {
-        const column = parseInt(betParts[1]);
-        if (winningNum % 3 === (column === 3 ? 0 : column)) {
-          return 3;
-        }
+        const column = Number(betParts[1]); // 1,2,3
+        const colMap = {
+          1: [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34],
+          2: [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
+          3: [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
+        };
+        if (colMap[column]?.includes(winningNum)) return 2; // 2:1
         break;
       }
 
-      // Apuesta de docena: paga 2:1
       case "dozen": {
-        const dozen = parseInt(betParts[1]);
-        const dozenStart = (dozen - 1) * 12 + 1;
-        const dozenEnd = dozen * 12;
-        if (winningNum >= dozenStart && winningNum <= dozenEnd) {
-          return 3;
-        }
+        const dozen = Number(betParts[1]); // 1,2,3
+        const start = (dozen - 1) * 12 + 1;
+        const end = dozen * 12;
+        if (winningNum >= start && winningNum <= end) return 2; // 2:1
         break;
       }
 
-      // Apuesta al par (even money): paga 1:1
       case "even_money": {
-        const type = betParts[1];
+        const type = betParts[2]; // red, black, even, odd, low, high
         if (type === "red" && RouletteEngine.RED_NUMBERS.has(winningNum))
-          return 2;
+          return 1;
         if (type === "black" && RouletteEngine.BLACK_NUMBERS.has(winningNum))
-          return 2;
+          return 1;
         if (type === "even" && winningNum !== 0 && winningNum % 2 === 0)
-          return 2;
-        if (type === "odd" && winningNum % 2 !== 0) return 2;
-        if (type === "low" && winningNum >= 1 && winningNum <= 18) return 2;
-        if (type === "high" && winningNum >= 19 && winningNum <= 36) return 2;
+          return 1;
+        if (type === "odd" && winningNum % 2 !== 0) return 1;
+        if (type === "low" && winningNum >= 1 && winningNum <= 18) return 1;
+        if (type === "high" && winningNum >= 19 && winningNum <= 36) return 1;
+        break;
+      }
+
+      case "2:1": {
+        // betKey: "2:1-1", "2:1-2", "2:1-3"
+        const match = betKey.match(/2:1-(\d)/);
+        if (match) {
+          const column = Number(match[1]);
+          const colMap = {
+            1: [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34],
+            2: [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
+            3: [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
+          };
+          if (colMap[column]?.includes(winningNum)) return 2; // 2:1
+        }
         break;
       }
     }
 
-    return 0;
+    return 0; // pérdida
   }
 }

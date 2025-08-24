@@ -11,17 +11,22 @@ export const singlePlayerHandler = (io, socket) => {
   socket.on("single-join", (data, callback) => {
     const { userId, userName, balance } = data;
     const player = new User(userId, userName, balance);
+
+    // Guardar referencia del player en el socket
+    socket.player = player;
+
+    // Usar socket.id solo para la sala
     const roomId = socket.id;
 
     try {
       const room = gameManager.getOrCreateSingleRoom(roomId, io);
-      room.addPlayer(player);
+      room.addPlayer(player, socket);
       socket.join(roomId);
 
       if (callback) {
         callback({
           message: "Unido",
-          roomId: roomId,
+          roomId,
           user: player.toSocketData(),
         });
       }
@@ -33,6 +38,8 @@ export const singlePlayerHandler = (io, socket) => {
     }
   });
 
+  const getPlayerId = () => socket.player?.id;
+
   socket.on("place-bet", (betData) => {
     const { betKey, amount, roomId } = betData;
     const room = gameManager.getRoom(roomId);
@@ -40,43 +47,40 @@ export const singlePlayerHandler = (io, socket) => {
       socket.emit("error", { message: "No se pueden colocar apuestas ahora." });
       return;
     }
-    room.placeBet(socket.id, betKey, amount);
+    if (!getPlayerId()) return;
+    room.placeBet(getPlayerId(), betKey, amount);
   });
 
-  socket.on("clear-bets", (data) => {
-    const { roomId } = data;
+  socket.on("clear-bets", ({ roomId }) => {
     const room = gameManager.getRoom(roomId);
-    if (!room) return;
-    room.clearBets(socket.id);
+    if (!room || !getPlayerId()) return;
+    room.clearBets(getPlayerId());
   });
 
-  socket.on("undo-bet", (data) => {
-    const { roomId } = data;
+  socket.on("undo-bet", ({ roomId }) => {
     const room = gameManager.getRoom(roomId);
-    if (!room) return;
-    room.undoBet(socket.id);
+    if (!room || !getPlayerId()) return;
+    room.undoBet(getPlayerId());
   });
 
-  socket.on("repeat-bet", (data) => {
-    const { roomId } = data;
+  socket.on("repeat-bet", ({ roomId }) => {
     const room = gameManager.getRoom(roomId);
-    if (!room) return;
-    room.repeatBet(socket.id);
+    if (!room || !getPlayerId()) return;
+    room.repeatBet(getPlayerId());
   });
 
-  socket.on("double-bet", (data) => {
-    const { roomId } = data;
+  socket.on("double-bet", ({ roomId }) => {
     const room = gameManager.getRoom(roomId);
-    if (!room) return;
-    room.doubleBet(socket.id);
+    if (!room || !getPlayerId()) return;
+    room.doubleBet(getPlayerId());
   });
 
-  // 💡 Lógica crucial para el flujo: detiene el temporizador al desconectarse.
+  // Lógica de desconexión
   socket.on("disconnect", () => {
     const room = gameManager.getRoom(socket.id);
-    if (room) {
+    if (room && getPlayerId()) {
       room.stopCountdown();
-      room.removePlayer(socket.id);
+      room.removePlayer(getPlayerId());
       gameManager.removeRoom(socket.id);
     }
   });
