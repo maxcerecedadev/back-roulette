@@ -14,8 +14,9 @@ export class RouletteEngine {
     ["even_money_low", "even_money_high"],
   ]; // Reglas para combinaciones de apuestas
 
-  static COLUMN_BET_KEYS = ["2:1-1", "2:1-2", "2:1-3"];
+  static COLUMN_BET_KEYS = ["column_1", "column_2", "column_3"];
   static DOZEN_BET_KEYS = ["dozen_1", "dozen_2", "dozen_3"];
+
   /**
    * @param {number} queueSize - El tamaño de la cola de resultados futuros.
    */
@@ -95,7 +96,6 @@ export class RouletteEngine {
   getBetResult(winningNumber, betKey) {
     const winningNum = Number(winningNumber.number);
 
-    // --- FIX: detectar correctamente even_money ---
     let betType;
     let type;
 
@@ -153,17 +153,6 @@ export class RouletteEngine {
         break;
       }
 
-      case "column": {
-        const column = Number(betKey.split("_")[1]); // 1,2,3
-        const colMap = {
-          1: [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34],
-          2: [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
-          3: [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
-        };
-        if (colMap[column]?.includes(winningNum)) return 2; // 2:1
-        break;
-      }
-
       case "dozen": {
         const dozen = Number(betKey.split("_")[1]); // 1,2,3
         const start = (dozen - 1) * 12 + 1;
@@ -185,17 +174,14 @@ export class RouletteEngine {
         break;
       }
 
-      case "2:1": {
-        const match = betKey.match(/2:1-(\d)/);
-        if (match) {
-          const column = Number(match[1]);
-          const colMap = {
-            1: [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34],
-            2: [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
-            3: [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
-          };
-          if (colMap[column]?.includes(winningNum)) return 2; // 2:1
-        }
+      case "column": {
+        const column = Number(betKey.split("_")[1]); // 1,2,3
+        const colMap = {
+          1: [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
+          2: [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
+          3: [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34],
+        };
+        if (colMap[column]?.includes(winningNum)) return 2; // 2:1
         break;
       }
     }

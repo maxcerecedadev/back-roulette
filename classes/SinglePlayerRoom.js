@@ -143,74 +143,6 @@ export class SinglePlayerRoom {
     }, 6000); // 6s = duración de la animación en front
   }
 
-  // processPayout(winningNumber) {
-  //   console.log(
-  //     `\n🏆 [processPayout] Iniciando proceso de pago. Número ganador: ${winningNumber.number}`
-  //   );
-
-  //   this.players.forEach((player, playerId) => {
-  //     let totalWin = 0;
-  //     const playerBets = this.bets.get(playerId) || new Map();
-  //     const didPlayerBet = playerBets.size > 0;
-
-  //     console.log("[DEBUG][processPayout] Apuestas actuales:", playerId, [
-  //       ...playerBets.entries(),
-  //     ]);
-
-  //     playerBets.forEach((betAmount, betKey) => {
-  //       const multiplier = this.rouletteEngine.getBetResult(
-  //         winningNumber,
-  //         betKey
-  //       );
-  //       let won = 0;
-  //       if (multiplier > 0) {
-  //         // stake + ganancia neta
-  //         won = betAmount + betAmount * multiplier;
-  //       }
-  //       totalWin += won;
-  //     });
-
-  //     if (totalWin > 0) {
-  //       player.updateBalance(totalWin);
-  //     }
-
-  //     let resultStatus = "no_bet";
-  //     if (didPlayerBet) {
-  //       resultStatus = totalWin > 0 ? "win" : "lose";
-  //     }
-
-  //     console.log(
-  //       `[processPayout] Jugador ${player.name}. Total Ganado: ${totalWin}. Nuevo Balance: ${player.balance}. Estado: ${resultStatus}`
-  //     );
-
-  //     const payload = {
-  //       state: GAME_STATES.PAYOUT,
-  //       winningNumber: winningNumber.number,
-  //       winningColor: winningNumber.color,
-  //       totalWinnings: totalWin,
-  //       newBalance: player.balance,
-  //       resultStatus: resultStatus,
-  //     };
-
-  //     console.log(
-  //       `[processPayout] Enviando payload a jugador ${playerId}: `,
-  //       JSON.stringify(payload)
-  //     );
-  //     // this.server.to(player.socketId).emit("game-state-update", payload);
-  //     this.broadcast("game-state-update", payload);
-
-  //     // 💾 Guardar las apuestas de esta ronda como "últimas" ANTES de limpiarlas
-  //     this.lastBets.set(playerId, new Map(playerBets));
-
-  //     // 🧹 Limpiar apuestas activas para la próxima ronda
-  //     this.bets.set(playerId, new Map());
-  //   });
-
-  //   setTimeout(() => {
-  //     this.nextState();
-  //   }, 5000);
-  // }
-
   processPayout(winningNumber) {
     console.log(
       `[processPayout] Iniciando payout con número ganador:`,
@@ -394,11 +326,9 @@ export class SinglePlayerRoom {
     let totalAmount = 0;
     lastBets.forEach((amount) => (totalAmount += amount));
     if (player.balance < totalAmount) {
-      this.server
-        .to(playerId)
-        .emit("error", {
-          message: "Saldo insuficiente para repetir apuestas.",
-        });
+      this.server.to(playerId).emit("error", {
+        message: "Saldo insuficiente para repetir apuestas.",
+      });
       return;
     }
 
