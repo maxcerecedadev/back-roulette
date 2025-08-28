@@ -30,22 +30,18 @@ export class SinglePlayerRoom {
   addPlayer(player, socket) {
     if (this.players.size >= 1) {
       throw new Error("Esta sala es solo para un jugador.");
-    }
+    } // Añadir socketId a la instancia de User
 
-    // Añadir socketId a la instancia de User
-    player.socketId = socket.id;
+    player.socketId = socket.id; // Guardar la instancia completa en el Map
 
-    // Guardar la instancia completa en el Map
     this.players.set(player.id, player);
 
     console.log(
       `🟢 Jugador ${player.name} (${player.id}) se unió. Balance: ${player.balance}`
-    );
+    ); // Emitir solo al socket del jugador
 
-    // Emitir solo al socket del jugador
-    this.server.to(socket.id).emit("player-initialized", player.toSocketData());
+    this.server.to(socket.id).emit("player-initialized", player.toSocketData()); // Actualizar estado a todos los que estén en la sala
 
-    // Actualizar estado a todos los que estén en la sala
     this.broadcast("game-state-update", {
       state: this.gameState,
       time: this.timeRemaining,
@@ -117,6 +113,65 @@ export class SinglePlayerRoom {
     }, 6000); // 6s = duración de la animación en front
   }
 
+  // processPayout(winningNumber) {
+  //   console.log(
+  //     `\n🏆 [processPayout] Iniciando proceso de pago. Número ganador: ${winningNumber.number}`
+  //   );
+
+  //   this.players.forEach((player, playerId) => {
+  //     let totalWin = 0;
+  //     const playerBets = this.bets.get(playerId) || new Map();
+  //     const didPlayerBet = playerBets.size > 0;
+
+  //     playerBets.forEach((betAmount, betKey) => {
+  //       const multiplier = this.rouletteEngine.getBetResult(
+  //         winningNumber,
+  //         betKey
+  //       );
+  //       const won = betAmount * multiplier;
+  //       totalWin += won;
+  //     }); // Agrega las ganancias al balance del jugador
+
+  //     if (totalWin > 0) {
+  //       player.updateBalance(totalWin);
+  //     } // <-- Lógica para determinar el estado del resultado
+
+  //     let resultStatus = "no_bet"; // Valor por defecto
+  //     if (didPlayerBet) {
+  //       if (totalWin > 0) {
+  //         resultStatus = "win";
+  //       } else {
+  //         resultStatus = "lose";
+  //       }
+  //     }
+
+  //     console.log(
+  //       `[processPayout] Jugador ${player.name}. Total Ganado: ${totalWin}. Nuevo Balance: ${player.balance}. Estado: ${resultStatus}`
+  //     );
+
+  //     const payload = {
+  //       state: GAME_STATES.PAYOUT,
+  //       winningNumber: winningNumber.number,
+  //       winningColor: winningNumber.color,
+  //       totalWinnings: totalWin,
+  //       newBalance: player.balance,
+  //       resultStatus: resultStatus, // <-- Nuevo campo emitido
+  //     };
+
+  //     console.log(
+  //       `[processPayout] Enviando payload a jugador ${playerId}: `,
+  //       JSON.stringify(payload)
+  //     );
+  //     this.server.to(player.socketId).emit("game-state-update", payload);
+
+  //     this.bets.set(playerId, new Map());
+  //   });
+
+  //   setTimeout(() => {
+  //     this.nextState();
+  //   }, 5000);
+  // }
+
   processPayout(winningNumber) {
     console.log(
       `\n🏆 [processPayout] Iniciando proceso de pago. Número ganador: ${winningNumber.number}`
@@ -127,28 +182,30 @@ export class SinglePlayerRoom {
       const playerBets = this.bets.get(playerId) || new Map();
       const didPlayerBet = playerBets.size > 0;
 
+      console.log("[DEBUG][processPayout] Apuestas actuales:", playerId, [
+        ...playerBets.entries(),
+      ]);
+
       playerBets.forEach((betAmount, betKey) => {
         const multiplier = this.rouletteEngine.getBetResult(
           winningNumber,
           betKey
         );
-        const won = betAmount * multiplier;
+        let won = 0;
+        if (multiplier > 0) {
+          // stake + ganancia neta
+          won = betAmount + betAmount * multiplier;
+        }
         totalWin += won;
       });
 
-      // Agrega las ganancias al balance del jugador
       if (totalWin > 0) {
         player.updateBalance(totalWin);
       }
 
-      // <-- Lógica para determinar el estado del resultado
-      let resultStatus = "no_bet"; // Valor por defecto
+      let resultStatus = "no_bet";
       if (didPlayerBet) {
-        if (totalWin > 0) {
-          resultStatus = "win";
-        } else {
-          resultStatus = "lose";
-        }
+        resultStatus = totalWin > 0 ? "win" : "lose";
       }
 
       console.log(
@@ -161,7 +218,7 @@ export class SinglePlayerRoom {
         winningColor: winningNumber.color,
         totalWinnings: totalWin,
         newBalance: player.balance,
-        resultStatus: resultStatus, // <-- Nuevo campo emitido
+        resultStatus: resultStatus,
       };
 
       console.log(
@@ -170,6 +227,10 @@ export class SinglePlayerRoom {
       );
       this.server.to(player.socketId).emit("game-state-update", payload);
 
+      // 💾 Guardar las apuestas de esta ronda como "últimas" ANTES de limpiarlas
+      this.lastBets.set(playerId, new Map(playerBets));
+
+      // 🧹 Limpiar apuestas activas para la próxima ronda
       this.bets.set(playerId, new Map());
     });
 
@@ -182,22 +243,31 @@ export class SinglePlayerRoom {
     console.log(
       `[SinglePlayerRoom] placeBet llamado: ${playerId}, ${betKey}, ${amount}`
     );
-    console.log(
-      "[DEBUG] placeBet playerId:",
-      playerId,
-      "players.keys():",
-      Array.from(this.players.keys())
-    );
 
     if (this.gameState !== GAME_STATES.BETTING) return;
     const player = this.players.get(playerId);
     if (!player || player.balance < amount) return;
 
-    if (!this.bets.has(playerId)) this.bets.set(playerId, new Map());
+    if (!this.bets.has(playerId)) {
+      this.bets.set(playerId, new Map());
+    }
     const playerBets = this.bets.get(playerId);
+
+    if (!this.rouletteEngine.isBetAllowed(betKey, playerBets)) {
+      console.log(`🚫 Apuesta no permitida: ${betKey}`);
+      return;
+    }
+
     const currentAmount = playerBets.get(betKey) || 0;
     playerBets.set(betKey, currentAmount + amount);
     player.balance -= amount;
+
+    // 🔥 Guardar también como última apuesta
+    if (!this.lastBets.has(playerId)) {
+      this.lastBets.set(playerId, new Map());
+    }
+    const lastPlayerBets = this.lastBets.get(playerId);
+    lastPlayerBets.set(betKey, (lastPlayerBets.get(betKey) || 0) + amount);
 
     console.log(
       `🟢 [placeBet] Jugador ${player.name} apostó ${amount} a ${betKey}. Nuevo balance: ${player.balance}`
@@ -255,44 +325,51 @@ export class SinglePlayerRoom {
   repeatBet(playerId) {
     if (this.gameState !== GAME_STATES.BETTING) return;
     if (!this.lastBets.has(playerId)) return;
+
     const lastPlayerBets = this.lastBets.get(playerId);
     const player = this.players.get(playerId);
     if (!player) return;
 
+    let totalBet = 0;
+
     lastPlayerBets.forEach((amount, betKey) => {
-      if (player.balance >= amount) this.placeBet(playerId, betKey, amount);
+      // Reusar placeBet asegura validación y actualización correcta
+      this.placeBet(playerId, betKey, amount);
+      totalBet += amount;
     });
 
-    this.server.to(playerId).emit("bets-repeated", {
-      bets: Array.from(lastPlayerBets.entries()).map(([betKey, amount]) => ({
-        betKey,
-        amount,
-      })),
+    // Emitimos el estado actualizado después de repetir
+    const playerBets = this.bets.get(playerId) || new Map();
+    this.server.to(playerId).emit("repeat-bet", {
       newBalance: player.balance,
+      bets: Array.from(playerBets, ([key, val]) => ({
+        betKey: key,
+        amount: val,
+      })),
+      totalBet,
     });
+
+    console.log(
+      `[repeatBet] Jugador ${player.name} repitió apuestas. Balance: ${player.balance}, Total repetido: ${totalBet}`
+    );
   }
 
   doubleBet(playerId) {
     if (this.gameState !== GAME_STATES.BETTING) return;
     if (!this.bets.has(playerId)) return;
+
     const playerBets = this.bets.get(playerId);
     const player = this.players.get(playerId);
     if (!player) return;
 
     playerBets.forEach((amount, betKey) => {
-      if (player.balance >= amount) this.placeBet(playerId, betKey, amount);
-    });
-
-    this.server.to(playerId).emit("bets-doubled", {
-      bets: Array.from(playerBets.entries()).map(([betKey, amount]) => ({
-        betKey,
-        amount,
-      })),
-      newBalance: player.balance,
+      // Duplicar la apuesta solo si alcanza el saldo
+      if (player.balance >= amount) {
+        this.placeBet(playerId, betKey, amount);
+      }
     });
   }
 
-  // --- Resultados dinámicos usando RouletteEngine ---
   peekQueue(count = 20) {
     while (this.rouletteEngine.resultsQueue.length < count)
       this.rouletteEngine.fillQueue();
