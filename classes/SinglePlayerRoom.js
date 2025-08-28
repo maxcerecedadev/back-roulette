@@ -376,36 +376,50 @@ export class SinglePlayerRoom {
     });
   }
 
+  // Repite las últimas apuestas válidas de un jugador si tiene saldo suficiente
   repeatBet(playerId) {
     if (this.gameState !== GAME_STATES.BETTING) return;
-    if (!this.lastBets.has(playerId)) return;
 
-    const lastPlayerBets = this.lastBets.get(playerId);
     const player = this.players.get(playerId);
     if (!player) return;
 
-    let totalBet = 0;
+    const lastBets = this.lastBets.get(playerId);
+    if (!lastBets || lastBets.size === 0) {
+      this.server
+        .to(playerId)
+        .emit("error", { message: "No hay apuestas para repetir." });
+      return;
+    }
 
-    lastPlayerBets.forEach((amount, betKey) => {
-      // Reusar placeBet asegura validación y actualización correcta
-      this.placeBet(playerId, betKey, amount);
-      totalBet += amount;
+    let totalAmount = 0;
+    lastBets.forEach((amount) => (totalAmount += amount));
+    if (player.balance < totalAmount) {
+      this.server
+        .to(playerId)
+        .emit("error", {
+          message: "Saldo insuficiente para repetir apuestas.",
+        });
+      return;
+    }
+
+    const repeatedBets = new Map();
+    lastBets.forEach((amount, betKey) => {
+      repeatedBets.set(betKey, amount);
     });
 
-    // Emitimos el estado actualizado después de repetir
-    const playerBets = this.bets.get(playerId) || new Map();
+    this.bets.set(playerId, repeatedBets);
+    player.balance -= totalAmount;
+
+    const betsArray = Array.from(repeatedBets, ([key, val]) => ({
+      betKey: key,
+      amount: val,
+    }));
+
     this.server.to(playerId).emit("repeat-bet", {
       newBalance: player.balance,
-      bets: Array.from(playerBets, ([key, val]) => ({
-        betKey: key,
-        amount: val,
-      })),
-      totalBet,
+      bets: betsArray,
+      totalBet: totalAmount,
     });
-
-    console.log(
-      `[repeatBet] Jugador ${player.name} repitió apuestas. Balance: ${player.balance}, Total repetido: ${totalBet}`
-    );
   }
 
   doubleBet(playerId) {
