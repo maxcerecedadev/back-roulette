@@ -152,13 +152,22 @@ export class SinglePlayerRoom {
     this.players.forEach((player, playerId) => {
       const playerBets = this.bets.get(playerId) || new Map();
       let totalWin = 0;
+      const betResults = [];
 
       playerBets.forEach((amount, betKey) => {
-        const multiplier = this.rouletteEngine.getBetResult(
+        const multiplier = this.rouletteEngine.calculatePayout(
           winningNumber,
           betKey
         );
-        if (multiplier > 0) totalWin += amount + amount * multiplier;
+        const netWin = amount * multiplier; // ganancia neta por apuesta
+        totalWin += netWin;
+
+        betResults.push({
+          betKey,
+          amount,
+          result: netWin > 0 ? "win" : "lose",
+          netWin,
+        });
       });
 
       player.updateBalance(totalWin);
@@ -173,30 +182,38 @@ export class SinglePlayerRoom {
         totalWinnings: totalWin,
         newBalance: player.balance,
         resultStatus,
+        betResults, // <-- aquí agregamos detalle de cada apuesta
       };
 
+      // Logging detallado por apuesta
+      console.log(`[processPayout] Detalle de apuestas de ${player.name}:`);
+      betResults.forEach((b) => {
+        console.log(
+          `  Apuesta ${b.betKey} de ${
+            b.amount
+          }: ${b.result.toUpperCase()}, ganancia neta ${b.netWin}`
+        );
+      });
       console.log(
-        `[processPayout] Emitiendo a player ${player.name}:`,
-        payload
+        `[processPayout] Total ganancia neta: ${totalWin}, nuevo balance: ${player.balance}`
       );
 
-      // Emisión directa al socket del jugador
+      // Emitir al socket del jugador
       if (player.socketId) {
         this.server.to(player.socketId).emit("game-state-update", payload);
       } else {
-        // fallback global para depuración
         console.warn(
           `[processPayout] player.socketId es null, emitiendo broadcast`
         );
         this.broadcast("game-state-update", payload);
       }
 
-      // Guardar últimas apuestas
+      // Guardar últimas apuestas y limpiar apuestas activas
       this.lastBets.set(playerId, new Map(playerBets));
-      this.bets.set(playerId, new Map()); // limpiar apuestas activas
+      this.bets.set(playerId, new Map());
     });
 
-    setTimeout(() => this.nextState(), 5000); // pasar al siguiente estado después del payout
+    setTimeout(() => this.nextState(), 5000);
   }
 
   placeBet(playerId, betKey, amount) {
