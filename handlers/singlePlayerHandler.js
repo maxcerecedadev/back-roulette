@@ -75,7 +75,19 @@ export const singlePlayerHandler = (io, socket) => {
     room.doubleBet(getPlayerId());
   });
 
-  // Lógica de desconexión
+  socket.on("spin", ({ roomId }) => {
+    const room = gameManager.getRoom(roomId);
+    if (!room) return;
+
+    if (room.gameState === "betting") {
+      room.nextState();
+    }
+
+    if (room.gameState === "spinning") {
+      room.triggerSpin();
+    }
+  });
+
   socket.on("disconnect", () => {
     const room = gameManager.getRoom(socket.id);
     if (room && getPlayerId()) {

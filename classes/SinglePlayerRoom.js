@@ -17,30 +17,29 @@ export class SinglePlayerRoom {
     this.lastBets = new Map();
     this.gameState = GAME_STATES.BETTING;
     this.timeRemaining = 20;
+    this.manualMode = true; // <- Modo manual por defecto
     this.rouletteEngine = new RouletteEngine(20);
     this.winningNumber = null;
     this.lastWinningNumber = null;
 
     this.startCountdown();
   }
+
   broadcast(event, data) {
     this.server.to(this.id).emit(event, data);
   }
 
   addPlayer(player, socket) {
-    if (this.players.size >= 1) {
+    if (this.players.size >= 1)
       throw new Error("Esta sala es solo para un jugador.");
-    } // Añadir socketId a la instancia de User
-
-    player.socketId = socket.id; // Guardar la instancia completa en el Map
-
+    player.socketId = socket.id;
     this.players.set(player.id, player);
 
     console.log(
       `🟢 Jugador ${player.name} (${player.id}) se unió. Balance: ${player.balance}`
-    ); // Emitir solo al socket del jugador
+    );
 
-    this.server.to(socket.id).emit("player-initialized", player.toSocketData()); // Actualizar estado a todos los que estén en la sala
+    this.server.to(socket.id).emit("player-initialized", player.toSocketData());
 
     this.broadcast("game-state-update", {
       state: this.gameState,
@@ -57,12 +56,14 @@ export class SinglePlayerRoom {
 
   startCountdown() {
     this.countdownInterval = setInterval(() => {
-      this.timeRemaining--;
-      this.broadcast("game-state-update", {
-        state: this.gameState,
-        time: this.timeRemaining,
-      });
-      if (this.timeRemaining <= 0) this.nextState();
+      if (!this.manualMode || this.gameState !== GAME_STATES.BETTING) {
+        this.timeRemaining--;
+        this.broadcast("game-state-update", {
+          state: this.gameState,
+          time: this.timeRemaining,
+        });
+        if (this.timeRemaining <= 0) this.nextState();
+      }
     }, 1000);
   }
 
@@ -70,34 +71,35 @@ export class SinglePlayerRoom {
     clearInterval(this.countdownInterval);
   }
 
-  // nextState() {
-  //   console.log(`[nextState] Transicionando del estado: ${this.gameState}`);
-  //   this.stopCountdown();
-  //   if (this.gameState === GAME_STATES.BETTING) {
-  //     this.gameState = GAME_STATES.SPINNING;
-  //     this.spinWheel();
-  //   } else if (this.gameState === GAME_STATES.SPINNING) {
-  //     this.gameState = GAME_STATES.PAYOUT;
-  //     this.processPayout(this.winningNumber);
-  //   } else if (this.gameState === GAME_STATES.PAYOUT) {
-  //     this.gameState = GAME_STATES.BETTING;
-  //     this.timeRemaining = 20;
-  //     this.broadcast("game-state-update", {
-  //       state: this.gameState,
-  //       time: this.timeRemaining,
-  //     });
-  //     this.winningNumber = null;
-  //     this.startCountdown();
-  //   }
-  // }
+  setManualMode(value) {
+    this.manualMode = value;
+    console.log(`[SinglePlayerRoom] Modo manual: ${value}`);
+  }
+
+  triggerSpin() {
+    if (this.gameState !== GAME_STATES.SPINNING) {
+      console.warn(
+        "[triggerSpin] No se puede lanzar la ruleta en este estado."
+      );
+      return;
+    }
+    console.log("[triggerSpin] Botón presionado, lanzando rueda");
+    this.spinWheel();
+  }
+
   nextState() {
     console.log(`[nextState] Estado actual: ${this.gameState}`);
-
     this.stopCountdown();
 
     if (this.gameState === GAME_STATES.BETTING) {
       this.gameState = GAME_STATES.SPINNING;
-      this.spinWheel();
+
+      if (this.manualMode) {
+        console.log("[nextState] Esperando acción manual para spinWheel()");
+        this.broadcast("game-state-update", { state: this.gameState });
+      } else {
+        this.spinWheel();
+      }
     } else if (this.gameState === GAME_STATES.SPINNING) {
       this.gameState = GAME_STATES.PAYOUT;
 
@@ -117,7 +119,7 @@ export class SinglePlayerRoom {
         time: this.timeRemaining,
       });
       this.winningNumber = null;
-      this.startCountdown();
+      if (!this.manualMode) this.startCountdown();
     }
   }
 
@@ -125,7 +127,7 @@ export class SinglePlayerRoom {
     this.winningNumber = this.rouletteEngine.getNextWinningNumber();
     console.log(
       `🎡 [spinWheel] Número ganador generado: ${this.winningNumber.number} (${this.winningNumber.color})`
-    ); // AHORA se emite el estado con el número ganador
+    );
 
     this.broadcast("game-state-update", {
       state: this.gameState,
@@ -135,12 +137,12 @@ export class SinglePlayerRoom {
 
     console.log(
       `[spinWheel] Emisión enviada. Se pasará al estado PAYOUT en 6 segundos.`
-    ); // Pasar al siguiente estado después de que la animación termine
+    );
 
     setTimeout(() => {
       console.log(`[Timeout] 6 segundos pasaron. Llamando a nextState().`);
       this.nextState();
-    }, 6000); // 6s = duración de la animación en front
+    }, 6000);
   }
 
   processPayout(winningNumber) {
@@ -159,7 +161,7 @@ export class SinglePlayerRoom {
           winningNumber,
           betKey
         );
-        const netWin = amount * multiplier; // ganancia neta por apuesta
+        const netWin = amount * multiplier;
         totalWin += netWin;
 
         betResults.push({
@@ -182,10 +184,9 @@ export class SinglePlayerRoom {
         totalWinnings: totalWin,
         newBalance: player.balance,
         resultStatus,
-        betResults, // <-- aquí agregamos detalle de cada apuesta
+        betResults,
       };
 
-      // Logging detallado por apuesta
       console.log(`[processPayout] Detalle de apuestas de ${player.name}:`);
       betResults.forEach((b) => {
         console.log(
@@ -198,17 +199,12 @@ export class SinglePlayerRoom {
         `[processPayout] Total ganancia neta: ${totalWin}, nuevo balance: ${player.balance}`
       );
 
-      // Emitir al socket del jugador
       if (player.socketId) {
         this.server.to(player.socketId).emit("game-state-update", payload);
       } else {
-        console.warn(
-          `[processPayout] player.socketId es null, emitiendo broadcast`
-        );
         this.broadcast("game-state-update", payload);
       }
 
-      // Guardar últimas apuestas y limpiar apuestas activas
       this.lastBets.set(playerId, new Map(playerBets));
       this.bets.set(playerId, new Map());
     });
@@ -325,7 +321,6 @@ export class SinglePlayerRoom {
     });
   }
 
-  // Repite las últimas apuestas válidas de un jugador si tiene saldo suficiente
   repeatBet(playerId) {
     if (this.gameState !== GAME_STATES.BETTING) return;
 
