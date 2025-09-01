@@ -17,7 +17,7 @@ export class SinglePlayerRoom {
     this.lastBets = new Map();
     this.gameState = GAME_STATES.BETTING;
     this.timeRemaining = 20;
-    this.manualMode = true; // <- Modo manual por defecto
+    this.manualMode = true;
     this.rouletteEngine = new RouletteEngine(20);
     this.winningNumber = null;
     this.lastWinningNumber = null;
