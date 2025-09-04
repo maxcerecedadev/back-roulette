@@ -145,59 +145,82 @@ export class SinglePlayerRoom {
     }, 6000);
   }
 
+  // En tu archivo de backend, en la clase SinglePlayerRoom
   processPayout(winningNumber) {
     console.log(
-      `[processPayout] Iniciando payout con número ganador:`,
+      `[processPayout] Iniciando payout. Número ganador:`,
       winningNumber
     );
 
     this.players.forEach((player, playerId) => {
       const playerBets = this.bets.get(playerId) || new Map();
-      let totalWin = 0;
+      let totalNetWin = 0;
+      let totalBetAmount = 0;
       const betResults = [];
+      const balanceBeforePayout = player.balance; // Balance después de apuestas, antes de ganancias.
 
       playerBets.forEach((amount, betKey) => {
-        const multiplier = this.rouletteEngine.calculatePayout(
+        totalBetAmount += amount;
+        const profitMultiplier = this.rouletteEngine.calculatePayout(
           winningNumber,
           betKey
         );
-        const netWin = amount * multiplier;
-        totalWin += netWin;
-
+        const isWin = profitMultiplier > 0;
+        const netWin = isWin ? amount * profitMultiplier : -amount;
+        totalNetWin += netWin;
         betResults.push({
           betKey,
           amount,
-          result: netWin > 0 ? "win" : "lose",
+          result: isWin ? "win" : "lose",
           netWin,
         });
       });
 
-      player.updateBalance(totalWin);
+      // ✅ LÓGICA CORREGIDA: Solo actualizamos el balance si hay ganancias.
+      let balanceAfterPayout;
+      if (totalNetWin > 0) {
+        player.updateBalance(totalNetWin); // Suma las ganancias netas
+        balanceAfterPayout = player.balance;
+      } else {
+        balanceAfterPayout = balanceBeforePayout; // Si se perdió, el balance ya es el correcto.
+      }
+
+      console.log(
+        "------------------------------------------------------------"
+      );
+      console.log(`[PAYOUT START] Jugador: ${player.name} (${playerId})`);
+      console.log(`Balance antes del payout: ${balanceBeforePayout}`);
+      console.log(`Total apostado en esta ronda: ${totalBetAmount}`);
+      console.log(
+        `Número ganador: ${winningNumber.number} (${winningNumber.color})`
+      );
+      console.log("  Detalle de apuestas:");
+      betResults.forEach((b) => {
+        console.log(
+          `- ${b.betKey} | stake=${
+            b.amount
+          } | ${b.result.toUpperCase()} | netWin=${b.netWin}`
+        );
+      });
+      console.log("  Totales:");
+      console.log(`totalNetWin (ganancia - pérdidas) = ${totalNetWin}`);
+      console.log(`Balance después del payout: ${balanceAfterPayout}`);
+      console.log(
+        "------------------------------------------------------------"
+      );
 
       const resultStatus =
-        playerBets.size === 0 ? "no_bet" : totalWin > 0 ? "win" : "lose";
+        playerBets.size === 0 ? "no_bet" : totalNetWin > 0 ? "win" : "lose";
 
       const payload = {
-        state: GAME_STATES.PAYOUT,
+        state: "payout",
         winningNumber: winningNumber.number,
         winningColor: winningNumber.color,
-        totalWinnings: totalWin,
-        newBalance: player.balance,
+        totalWinnings: totalNetWin,
+        newBalance: balanceAfterPayout, // Envía el balance final
         resultStatus,
         betResults,
       };
-
-      console.log(`[processPayout] Detalle de apuestas de ${player.name}:`);
-      betResults.forEach((b) => {
-        console.log(
-          `  Apuesta ${b.betKey} de ${
-            b.amount
-          }: ${b.result.toUpperCase()}, ganancia neta ${b.netWin}`
-        );
-      });
-      console.log(
-        `[processPayout] Total ganancia neta: ${totalWin}, nuevo balance: ${player.balance}`
-      );
 
       if (player.socketId) {
         this.server.to(player.socketId).emit("game-state-update", payload);
