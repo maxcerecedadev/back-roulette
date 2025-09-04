@@ -145,7 +145,6 @@ export class SinglePlayerRoom {
     }, 6000);
   }
 
-  // En tu archivo de backend, en la clase SinglePlayerRoom
   processPayout(winningNumber) {
     console.log(
       `[processPayout] Iniciando payout. Número ganador:`,
@@ -154,10 +153,10 @@ export class SinglePlayerRoom {
 
     this.players.forEach((player, playerId) => {
       const playerBets = this.bets.get(playerId) || new Map();
-      let totalNetWin = 0;
+      let totalWinnings = 0; // ✅ Solo las ganancias NETAS (no incluye devolución de apuesta)
       let totalBetAmount = 0;
       const betResults = [];
-      const balanceBeforePayout = player.balance; // Balance después de apuestas, antes de ganancias.
+      const balanceBeforePayout = player.balance; // Balance YA tiene descontadas las apuestas
 
       playerBets.forEach((amount, betKey) => {
         totalBetAmount += amount;
@@ -166,24 +165,45 @@ export class SinglePlayerRoom {
           betKey
         );
         const isWin = profitMultiplier > 0;
-        const netWin = isWin ? amount * profitMultiplier : -amount;
-        totalNetWin += netWin;
+
+        let winnings = 0; // ✅ Ganancia neta (sin la apuesta)
+        let netWin = 0; // ✅ Resultado neto de la apuesta: +ganancia o -apuesta
+        let totalReceived = 0; // Para UI: lo que "recibe" (apuesta + ganancia)
+
+        if (isWin) {
+          // ✅ Gana: recibe su apuesta de vuelta + ganancia neta
+          winnings = amount * profitMultiplier; // Ej: 1000 * 17 = 17,000
+          totalReceived = amount + winnings; // Ej: 1000 + 17,000 = 18,000
+          netWin = winnings; // El "neto" de la apuesta es solo la ganancia
+          totalWinnings += winnings; // ✅ Solo sumamos ganancia neta al balance
+        } else {
+          // Pierde: no recibe nada
+          winnings = 0;
+          totalReceived = 0;
+          netWin = -amount; // Perdió la apuesta
+        }
+
         betResults.push({
           betKey,
           amount,
           result: isWin ? "win" : "lose",
-          netWin,
+          winnings, // ✅ Solo ganancia neta
+          netWin, // ✅ +ganancia o -apuesta
+          totalReceived, // ✅ Para UI: apuesta + ganancia si ganó
+          profitMultiplier: isWin ? profitMultiplier : 0,
         });
       });
 
-      // ✅ LÓGICA CORREGIDA: Solo actualizamos el balance si hay ganancias.
-      let balanceAfterPayout;
-      if (totalNetWin > 0) {
-        player.updateBalance(totalNetWin); // Suma las ganancias netas
-        balanceAfterPayout = player.balance;
-      } else {
-        balanceAfterPayout = balanceBeforePayout; // Si se perdió, el balance ya es el correcto.
+      // ✅ Solo sumamos las ganancias netas al balance
+      // (la apuesta ya estaba descontada, y al ganar, "se devuelve" conceptualmente)
+      if (totalWinnings > 0) {
+        player.updateBalance(totalWinnings);
       }
+
+      const balanceAfterPayout = player.balance;
+
+      // ✅ Resultado neto de la ronda: ganancias netas - pérdidas totales
+      const totalNetResult = totalWinnings - totalBetAmount;
 
       console.log(
         "------------------------------------------------------------"
@@ -195,31 +215,58 @@ export class SinglePlayerRoom {
         `Número ganador: ${winningNumber.number} (${winningNumber.color})`
       );
       console.log("  Detalle de apuestas:");
-      betResults.forEach((b) => {
-        console.log(
-          `- ${b.betKey} | stake=${
-            b.amount
-          } | ${b.result.toUpperCase()} | netWin=${b.netWin}`
-        );
+
+      betResults.forEach((bet) => {
+        const status = bet.result === "win" ? "GANÓ" : "PERDIÓ";
+        const multiplier =
+          bet.profitMultiplier > 0 ? `(${bet.profitMultiplier}:1)` : "";
+
+        if (bet.result === "win") {
+          console.log(
+            `- ${bet.betKey} | Apuesta: ${bet.amount} | ${status} ${multiplier} | Ganancia: +${bet.winnings} | Total recibido: ${bet.totalReceived}`
+          );
+        } else {
+          console.log(
+            `- ${bet.betKey} | Apuesta: ${bet.amount} | ${status} | Perdido: -${bet.amount}`
+          );
+        }
       });
-      console.log("  Totales:");
-      console.log(`totalNetWin (ganancia - pérdidas) = ${totalNetWin}`);
+
+      console.log("  Resumen:");
+      console.log(
+        `Total apostado: -${totalBetAmount} (ya descontado del balance)`
+      );
+      console.log(`Total ganado (neto): +${totalWinnings}`);
+      console.log(
+        `Resultado neto de la ronda: ${
+          totalNetResult > 0 ? "+" : ""
+        }${totalNetResult}`
+      );
       console.log(`Balance después del payout: ${balanceAfterPayout}`);
       console.log(
         "------------------------------------------------------------"
       );
 
       const resultStatus =
-        playerBets.size === 0 ? "no_bet" : totalNetWin > 0 ? "win" : "lose";
+        playerBets.size === 0 ? "no_bet" : totalNetResult > 0 ? "win" : "lose";
 
       const payload = {
         state: "payout",
         winningNumber: winningNumber.number,
         winningColor: winningNumber.color,
-        totalWinnings: totalNetWin,
-        newBalance: balanceAfterPayout, // Envía el balance final
+        totalWinnings: totalWinnings, // ✅ Solo ganancias netas
+        totalNetResult: totalNetResult, // ✅ Resultado neto: ganancias - pérdidas
+        newBalance: balanceAfterPayout,
         resultStatus,
-        betResults,
+        betResults: betResults.map((bet) => ({
+          betKey: bet.betKey,
+          amount: bet.amount,
+          result: bet.result,
+          winnings: bet.winnings, // ✅ Ganancia neta
+          netWin: bet.netWin, // ✅ Ahora coincide con el frontend
+          totalReceived: bet.totalReceived, // ✅ Para UI
+          profitMultiplier: bet.profitMultiplier,
+        })),
       };
 
       if (player.socketId) {
@@ -234,7 +281,6 @@ export class SinglePlayerRoom {
 
     setTimeout(() => this.nextState(), 5000);
   }
-
   placeBet(playerId, betKey, amount) {
     console.log(
       `[SinglePlayerRoom] placeBet llamado: ${playerId}, ${betKey}, ${amount}`
