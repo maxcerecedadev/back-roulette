@@ -175,7 +175,7 @@ export class SinglePlayerRoom {
           winnings = amount * profitMultiplier; // Ej: 1000 * 17 = 17,000
           totalReceived = amount + winnings; // Ej: 1000 + 17,000 = 18,000
           netWin = winnings; // El "neto" de la apuesta es solo la ganancia
-          totalWinnings += winnings; // ✅ Solo sumamos ganancia neta al balance
+          totalWinnings += totalReceived; // ✅ Solo sumamos ganancia neta al balance
         } else {
           // Pierde: no recibe nada
           winnings = 0;
