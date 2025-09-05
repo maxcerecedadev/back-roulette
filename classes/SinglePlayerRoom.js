@@ -88,7 +88,9 @@ export class SinglePlayerRoom {
   }
 
   nextState() {
-    console.log(`[nextState] Estado actual: ${this.gameState}`);
+    console.log(
+      `[nextState] Estado actual: Desde aqui comienza nuevo ciclo: ${this.gameState}`
+    );
     this.stopCountdown();
 
     if (this.gameState === GAME_STATES.BETTING) {
@@ -153,10 +155,10 @@ export class SinglePlayerRoom {
 
     this.players.forEach((player, playerId) => {
       const playerBets = this.bets.get(playerId) || new Map();
-      let totalWinnings = 0; // ✅ Solo las ganancias NETAS (no incluye devolución de apuesta)
+      let totalWinnings = 0; // ✅ Ganancias netas (solo lo que gana, sin incluir devolución de apuesta)
       let totalBetAmount = 0;
       const betResults = [];
-      const balanceBeforePayout = player.balance; // Balance YA tiene descontadas las apuestas
+      const balanceBeforePayout = player.balance; // Balance ya tiene descontadas las apuestas
 
       playerBets.forEach((amount, betKey) => {
         totalBetAmount += amount;
@@ -166,56 +168,60 @@ export class SinglePlayerRoom {
         );
         const isWin = profitMultiplier > 0;
 
-        let winnings = 0; // ✅ Ganancia neta (sin la apuesta)
-        let netWin = 0; // ✅ Resultado neto de la apuesta: +ganancia o -apuesta
-        let totalReceived = 0; // Para UI: lo que "recibe" (apuesta + ganancia)
+        let winnings = 0;
+        let netWin = 0;
+        let totalReceived = 0;
 
         if (isWin) {
-          // ✅ Gana: recibe su apuesta de vuelta + ganancia neta
-          winnings = amount * profitMultiplier; // Ej: 1000 * 17 = 17,000
-          totalReceived = amount + winnings; // Ej: 1000 + 17,000 = 18,000
-          netWin = winnings; // El "neto" de la apuesta es solo la ganancia
-          totalWinnings += totalReceived; // ✅ Solo sumamos ganancia neta al balance
+          winnings = amount * profitMultiplier;
+          totalReceived = amount + winnings;
+          netWin = winnings;
+          totalWinnings += totalReceived;
         } else {
-          // Pierde: no recibe nada
           winnings = 0;
           totalReceived = 0;
-          netWin = -amount; // Perdió la apuesta
+          netWin = -amount;
         }
 
         betResults.push({
           betKey,
           amount,
           result: isWin ? "win" : "lose",
-          winnings, // ✅ Solo ganancia neta
-          netWin, // ✅ +ganancia o -apuesta
-          totalReceived, // ✅ Para UI: apuesta + ganancia si ganó
+          winnings,
+          netWin,
+          totalReceived,
           profitMultiplier: isWin ? profitMultiplier : 0,
         });
       });
 
-      // ✅ Solo sumamos las ganancias netas al balance
-      // (la apuesta ya estaba descontada, y al ganar, "se devuelve" conceptualmente)
+      // ✅ Actualizamos balance solo con ganancias netas
       if (totalWinnings > 0) {
         player.updateBalance(totalWinnings);
       }
 
       const balanceAfterPayout = player.balance;
-
-      // ✅ Resultado neto de la ronda: ganancias netas - pérdidas totales
       const totalNetResult = totalWinnings - totalBetAmount;
 
+      // 🔍 LOGS DETALLADOS PARA ENTENDER resultStatus
       console.log(
         "------------------------------------------------------------"
       );
       console.log(`[PAYOUT START] Jugador: ${player.name} (${playerId})`);
-      console.log(`Balance antes del payout: ${balanceBeforePayout}`);
-      console.log(`Total apostado en esta ronda: ${totalBetAmount}`);
+      console.log(`Balance antes: ${balanceBeforePayout}`);
+      console.log(`Total apostado: ${totalBetAmount}`);
+      console.log(`Ganancias netas (totalWinnings): ${totalWinnings}`);
       console.log(
-        `Número ganador: ${winningNumber.number} (${winningNumber.color})`
+        `Resultado neto (totalWinnings - totalBetAmount): ${totalNetResult}`
       );
-      console.log("  Detalle de apuestas:");
 
+      // 🔍 Mostramos el estado de las apuestas
+      if (playerBets.size === 0) {
+        console.log("⚠️  El jugador NO realizó apuestas esta ronda.");
+      } else {
+        console.log("Apuestas realizadas:", Array.from(playerBets.keys()));
+      }
+
+      console.log("Detalle de apuestas:");
       betResults.forEach((bet) => {
         const status = bet.result === "win" ? "GANÓ" : "PERDIÓ";
         const multiplier =
@@ -223,60 +229,85 @@ export class SinglePlayerRoom {
 
         if (bet.result === "win") {
           console.log(
-            `- ${bet.betKey} | Apuesta: ${bet.amount} | ${status} ${multiplier} | Ganancia: +${bet.winnings} | Total recibido: ${bet.totalReceived}`
+            `- ${bet.betKey} | ${bet.amount} | ${status} ${multiplier} | Ganancia: +${bet.winnings} | Total recibido: ${bet.totalReceived}`
           );
         } else {
           console.log(
-            `- ${bet.betKey} | Apuesta: ${bet.amount} | ${status} | Perdido: -${bet.amount}`
+            `- ${bet.betKey} | ${bet.amount} | ${status} | Perdido: -${bet.amount}`
           );
         }
       });
 
-      console.log("  Resumen:");
-      console.log(
-        `Total apostado: -${totalBetAmount} (ya descontado del balance)`
-      );
+      console.log("Resumen:");
+      console.log(`Total apostado: -${totalBetAmount}`);
       console.log(`Total ganado (neto): +${totalWinnings}`);
       console.log(
-        `Resultado neto de la ronda: ${
-          totalNetResult > 0 ? "+" : ""
+        `Resultado neto de ronda: ${
+          totalNetResult >= 0 ? "+" : ""
         }${totalNetResult}`
       );
-      console.log(`Balance después del payout: ${balanceAfterPayout}`);
-      console.log(
-        "------------------------------------------------------------"
-      );
+      console.log(`Balance después: ${balanceAfterPayout}`);
 
-      const resultStatus =
-        playerBets.size === 0 ? "no_bet" : totalNetResult > 0 ? "win" : "lose";
+      // 🔥 CÁLCULO Y LOG DE resultStatus
+      let resultStatus;
+      if (playerBets.size === 0) {
+        resultStatus = "no_bet";
+        console.log("🎯 resultStatus asignado: 'no_bet' (no hizo apuestas)");
+      } else if (totalWinnings > 0) {
+        resultStatus = "win";
+        console.log(
+          `🎯 resultStatus asignado: 'win' (totalWinnings > 0: ${totalWinnings})`
+        );
+      } else {
+        resultStatus = "lose";
+        console.log(`🎯 resultStatus asignado: 'lose' (totalWinnings = 0)`);
+      }
 
+      // 📦 Payload que se envía
       const payload = {
         state: "payout",
         winningNumber: winningNumber.number,
         winningColor: winningNumber.color,
-        totalWinnings: totalWinnings, // ✅ Solo ganancias netas
-        totalNetResult: totalNetResult, // ✅ Resultado neto: ganancias - pérdidas
+        totalWinnings, // ✅ Ganancia neta (solo lo que gana)
+        totalNetResult, // ✅ Para que el frontend sepa si ganó/perdió/empató
         newBalance: balanceAfterPayout,
-        resultStatus,
+        resultStatus, // 🔥 Este es el valor que se envía
         betResults: betResults.map((bet) => ({
           betKey: bet.betKey,
           amount: bet.amount,
           result: bet.result,
-          winnings: bet.winnings, // ✅ Ganancia neta
-          netWin: bet.netWin, // ✅ Ahora coincide con el frontend
-          totalReceived: bet.totalReceived, // ✅ Para UI
+          winnings: bet.winnings,
+          netWin: bet.netWin,
+          totalReceived: bet.totalReceived,
           profitMultiplier: bet.profitMultiplier,
         })),
       };
 
+      console.log(
+        `📤 Enviando a jugador ${player.name} (${playerId}) el estado:`,
+        {
+          resultStatus,
+          totalWinnings,
+          totalNetResult,
+          newBalance: balanceAfterPayout,
+          betCount: betResults.length,
+        }
+      );
+
+      // Emitir al jugador o broadcast
       if (player.socketId) {
         this.server.to(player.socketId).emit("game-state-update", payload);
       } else {
         this.broadcast("game-state-update", payload);
       }
 
+      // Guardar apuestas anteriores y limpiar
       this.lastBets.set(playerId, new Map(playerBets));
       this.bets.set(playerId, new Map());
+
+      console.log(
+        "------------------------------------------------------------"
+      );
     });
 
     setTimeout(() => this.nextState(), 5000);
