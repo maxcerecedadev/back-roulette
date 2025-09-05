@@ -1,8 +1,9 @@
+// BetPayoutCalculator.js
 export class BetPayoutCalculator {
   /**
    * Calcula el multiplicador de pago de una apuesta según el tipo y el número ganador.
    * @param {{number: number, color: string}} winningNumber - Objeto con número y color ganador
-   * @param {string} betKey - La clave de la apuesta (ej. 'straight_17', 'split_17_18', 'even_money_red')
+   * @param {string} betKey - La clave de la apuesta (ej. 'straight_17', 'street_13_14_15', 'even_money_red')
    * @param {Set<number>} redNumbers - Conjunto de números rojos
    * @param {Set<number>} blackNumbers - Conjunto de números negros
    * @returns {number} multiplicador de pago (0 si pierde, >0 si gana)
@@ -10,109 +11,90 @@ export class BetPayoutCalculator {
   static calculatePayout(winningNumber, betKey, redNumbers, blackNumbers) {
     const winningNum = Number(winningNumber.number);
 
-    let betType;
-    let type;
+    // Dividir la clave
+    const parts = betKey.trim().split("_");
+    const betType = parts[0];
+    const numberParts = parts.slice(1).map(Number); // Todos los números en la clave
 
-    // Determina si es apuesta "even_money" (rojo/negro, par/impar, bajo/alto)
+    // even_money es especial
     if (betKey.startsWith("even_money")) {
-      betType = "even_money";
-      type = betKey.split("_")[2]; // red, black, even, odd, low, high
-    } else {
-      const betParts = betKey.trim().split("_");
-      betType = betParts[0]; // straight, split, trio, street, corner, line, dozen, column
+      const type = parts[2]; // red, black, even, odd, low, high
+      if (type === "red") return redNumbers.has(winningNum) ? 1 : 0;
+      if (type === "black") return blackNumbers.has(winningNum) ? 1 : 0;
+      if (type === "even")
+        return winningNum !== 0 && winningNum % 2 === 0 ? 1 : 0;
+      if (type === "odd") return winningNum % 2 === 1 ? 1 : 0;
+      if (type === "low") return winningNum >= 1 && winningNum <= 18 ? 1 : 0;
+      if (type === "high") return winningNum >= 19 && winningNum <= 36 ? 1 : 0;
+      return 0;
     }
 
-    // Si el número ganador es 0, todas las apuestas externas pierden
-    if (
-      winningNum === 0 &&
-      ["even_money", "dozen", "column", "2:1"].includes(betType)
-    )
+    // Si el número ganador es 0, pierden docenas, columnas y even_money
+    if (winningNum === 0 && ["dozen", "column"].includes(betType)) {
       return 0;
+    }
 
     switch (betType) {
-      // ------------------------
+      // ------------------------ STRAIGHT
       case "straight":
-        // Apuesta a un solo número. Si coincide con el ganador paga 35:1
-        if (Number(betKey.split("_")[1]) === winningNum) return 35;
-        break;
+        return numberParts[0] === winningNum ? 35 : 0;
 
-      // ------------------------
+      // ------------------------ SPLIT
       case "split":
-        // Apuesta a dos números contiguos. Si el ganador está entre ellos paga 17:1
-        if (betKey.split("_").slice(1).map(Number).includes(winningNum))
-          return 17;
-        break;
+        return numberParts.length === 2 && numberParts.includes(winningNum)
+          ? 17
+          : 0;
 
-      // ------------------------
-      case "trio":
-        // Apuesta a un grupo de 3 números (trío). Si el ganador está allí paga 11:1
-        if (betKey.split("_").slice(1).map(Number).includes(winningNum))
-          return 11;
-        break;
-
-      // ------------------------
+      // ------------------------ STREET (3 números explícitos)
       case "street":
-        // Apuesta a una fila de 3 números consecutivos. Si el ganador está en esa fila paga 11:1
-        if (
-          winningNum >= Number(betKey.split("_")[1]) &&
-          winningNum <= Number(betKey.split("_")[1]) + 2
-        )
-          return 11;
-        break;
+        return numberParts.length === 3 && numberParts.includes(winningNum)
+          ? 11
+          : 0;
 
-      // ------------------------
+      // ------------------------ CORNER (4 números explícitos)
       case "corner":
-        // Apuesta a un cuadrado de 4 números. Si el ganador está allí paga 8:1
-        if (betKey.split("_").slice(1).map(Number).includes(winningNum))
-          return 8;
-        break;
+        return numberParts.length === 4 && numberParts.includes(winningNum)
+          ? 8
+          : 0;
 
-      // ------------------------
-      case "line": {
-        // Apuesta a dos filas consecutivas (6 números). Si el ganador está allí paga 5:1
-        const lineNums = betKey.split("_").slice(1).map(Number);
-        if (winningNum >= lineNums[0] && winningNum <= lineNums[1] + 5)
-          return 5;
-        break;
-      }
+      // ------------------------ LINE (6 números explícitos)
+      case "line":
+        return numberParts.length === 6 && numberParts.includes(winningNum)
+          ? 5
+          : 0;
 
-      // ------------------------
+      // ------------------------ TRIO (3 números: 0,1,2 o 0,2,3)
+      case "trio":
+        return numberParts.length === 3 && numberParts.includes(winningNum)
+          ? 11
+          : 0;
+
+      // ------------------------ DOZEN
       case "dozen": {
-        // Apuesta a una docena (1-12, 13-24, 25-36)
-        const dozen = Number(betKey.split("_")[1]);
+        const dozen = numberParts[0];
         const start = (dozen - 1) * 12 + 1;
         const end = dozen * 12;
-        if (winningNum >= start && winningNum <= end) return 2; // Paga 2:1
-        break;
+        return winningNum >= start && winningNum <= end ? 2 : 0;
       }
 
-      // ------------------------
-      case "even_money":
-        // Apuesta externa: rojo/negro, par/impar, bajo/alto
-        if (type === "red" && redNumbers.has(winningNum)) return 1;
-        if (type === "black" && blackNumbers.has(winningNum)) return 1;
-        if (type === "even" && winningNum !== 0 && winningNum % 2 === 0)
-          return 1;
-        if (type === "odd" && winningNum % 2 !== 0) return 1;
-        if (type === "low" && winningNum >= 1 && winningNum <= 18) return 1;
-        if (type === "high" && winningNum >= 19 && winningNum <= 36) return 1;
-        break;
-
-      // ------------------------
+      // ------------------------ COLUMN
       case "column": {
-        // Apuesta a una columna de 12 números
-        const column = Number(betKey.split("_")[1]);
+        const col = numberParts[0];
         const colMap = {
-          3: [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
-          2: [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
           1: [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34],
+          2: [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
+          3: [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
         };
-        if (colMap[column]?.includes(winningNum)) return 2; // Paga 2:1
-        break;
+        return colMap[col]?.includes(winningNum) ? 2 : 0;
       }
-    }
 
-    // Si no coincide con ninguna condición de pago, devuelve 0 (apuesta perdida)
-    return 0;
+      // ------------------------ BASKET (0,1,2,3)
+      case "basket":
+        return [0, 1, 2, 3].includes(winningNum) ? 8 : 0;
+
+      // ------------------------ DESCONOCIDO
+      default:
+        return 0;
+    }
   }
 }
