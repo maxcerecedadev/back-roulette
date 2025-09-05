@@ -281,6 +281,7 @@ export class SinglePlayerRoom {
 
     setTimeout(() => this.nextState(), 5000);
   }
+
   placeBet(playerId, betKey, amount) {
     console.log(
       `[SinglePlayerRoom] placeBet llamado: ${playerId}, ${betKey}, ${amount}`

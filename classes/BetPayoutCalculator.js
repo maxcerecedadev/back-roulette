@@ -14,7 +14,7 @@ export class BetPayoutCalculator {
     // Dividir la clave
     const parts = betKey.trim().split("_");
     const betType = parts[0];
-    const numberParts = parts.slice(1).map(Number); // Todos los números en la clave
+    const numberParts = parts.slice(1).map(Number);
 
     // even_money es especial
     if (betKey.startsWith("even_money")) {
