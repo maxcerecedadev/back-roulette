@@ -11,12 +11,10 @@ export class BetPayoutCalculator {
   static calculatePayout(winningNumber, betKey, redNumbers, blackNumbers) {
     const winningNum = Number(winningNumber.number);
 
-    // Dividir la clave
     const parts = betKey.trim().split("_");
     const betType = parts[0];
     const numberParts = parts.slice(1).map(Number);
 
-    // even_money es especial
     if (betKey.startsWith("even_money")) {
       const type = parts[2]; // red, black, even, odd, low, high
       if (type === "red") return redNumbers.has(winningNum) ? 1 : 0;

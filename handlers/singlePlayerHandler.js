@@ -1,6 +1,6 @@
 // src/handlers/singlePlayerHandler.js
 
-import { User } from "../classes/User.js";
+import { Player } from "../classes/Player.js";
 import * as gameManager from "../services/gameManager.js";
 
 /**
@@ -10,7 +10,7 @@ import * as gameManager from "../services/gameManager.js";
 export const singlePlayerHandler = (io, socket) => {
   socket.on("single-join", (data, callback) => {
     const { userId, userName, balance } = data;
-    const player = new User(userId, userName, balance);
+    const player = new Player(userId, userName, balance);
 
     // Guardar referencia del player en el socket
     socket.player = player;

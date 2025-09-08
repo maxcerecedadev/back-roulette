@@ -155,10 +155,10 @@ export class SinglePlayerRoom {
 
     this.players.forEach((player, playerId) => {
       const playerBets = this.bets.get(playerId) || new Map();
-      let totalWinnings = 0; // ✅ Ganancias netas (solo lo que gana, sin incluir devolución de apuesta)
+      let totalWinnings = 0;
       let totalBetAmount = 0;
       const betResults = [];
-      const balanceBeforePayout = player.balance; // Balance ya tiene descontadas las apuestas
+      const balanceBeforePayout = player.balance;
 
       playerBets.forEach((amount, betKey) => {
         totalBetAmount += amount;
@@ -194,7 +194,6 @@ export class SinglePlayerRoom {
         });
       });
 
-      // ✅ Actualizamos balance solo con ganancias netas
       if (totalWinnings > 0) {
         player.updateBalance(totalWinnings);
       }
@@ -202,7 +201,7 @@ export class SinglePlayerRoom {
       const balanceAfterPayout = player.balance;
       const totalNetResult = totalWinnings - totalBetAmount;
 
-      // 🔍 LOGS DETALLADOS PARA ENTENDER resultStatus
+      // 🔍 LOGS DETALLADOS
       console.log(
         "------------------------------------------------------------"
       );
@@ -214,7 +213,6 @@ export class SinglePlayerRoom {
         `Resultado neto (totalWinnings - totalBetAmount): ${totalNetResult}`
       );
 
-      // 🔍 Mostramos el estado de las apuestas
       if (playerBets.size === 0) {
         console.log("⚠️  El jugador NO realizó apuestas esta ronda.");
       } else {
@@ -248,7 +246,6 @@ export class SinglePlayerRoom {
       );
       console.log(`Balance después: ${balanceAfterPayout}`);
 
-      // 🔥 CÁLCULO Y LOG DE resultStatus
       let resultStatus;
       if (playerBets.size === 0) {
         resultStatus = "no_bet";
@@ -263,15 +260,14 @@ export class SinglePlayerRoom {
         console.log(`🎯 resultStatus asignado: 'lose' (totalWinnings = 0)`);
       }
 
-      // 📦 Payload que se envía
       const payload = {
         state: "payout",
         winningNumber: winningNumber.number,
         winningColor: winningNumber.color,
-        totalWinnings, // ✅ Ganancia neta (solo lo que gana)
-        totalNetResult, // ✅ Para que el frontend sepa si ganó/perdió/empató
+        totalWinnings,
+        totalNetResult,
         newBalance: balanceAfterPayout,
-        resultStatus, // 🔥 Este es el valor que se envía
+        resultStatus,
         betResults: betResults.map((bet) => ({
           betKey: bet.betKey,
           amount: bet.amount,
@@ -301,7 +297,6 @@ export class SinglePlayerRoom {
         this.broadcast("game-state-update", payload);
       }
 
-      // Guardar apuestas anteriores y limpiar
       this.lastBets.set(playerId, new Map(playerBets));
       this.bets.set(playerId, new Map());
 
@@ -475,7 +470,6 @@ export class SinglePlayerRoom {
 
     let totalAdditionalBet = 0;
 
-    // Calcular el total adicional que se intentará duplicar
     playerBets.forEach((amount) => {
       totalAdditionalBet += amount;
     });
@@ -487,12 +481,10 @@ export class SinglePlayerRoom {
       return;
     }
 
-    // Reusar placeBet asegura validación y actualización correcta de saldo
     playerBets.forEach((amount, betKey) => {
       this.placeBet(playerId, betKey, amount);
     });
 
-    // Emitir estado actualizado
     const updatedBets = this.bets.get(playerId) || new Map();
     const betsArray = Array.from(updatedBets, ([key, val]) => ({
       betKey: key,

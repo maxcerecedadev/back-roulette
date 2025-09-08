@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { Server as SocketServer } from "socket.io";
 import gameRoutes from "./routes/gameRoutes.js";
 import { singlePlayerHandler } from "./handlers/singlePlayerHandler.js";
+import { tournamentHandler } from "./handlers/tournamentHandler.js";
 
 const PORT = process.env.PORT || 2000;
 
@@ -18,16 +19,19 @@ const io = new SocketServer(server, {
   },
 });
 
-// 💡 Centraliza las salas aquí
-const singlePlayerRooms = new Map();
-
 // Monta las rutas de la API
 app.use("/api/v1", gameRoutes);
 
 io.on("connection", (socket) => {
-  console.log(`✅ Nuevo jugador conectado a la sala: ${socket.id}`);
+  console.log("Nuevo cliente conectado:", socket.id);
 
-  singlePlayerHandler(io, socket, singlePlayerRooms);
+  // Registrar handlers
+  singlePlayerHandler(io, socket);
+  tournamentHandler(io, socket);
+
+  socket.on("disconnect", () => {
+    console.log("Cliente desconectado:", socket.id);
+  });
 });
 
 server.listen(PORT, () => {
