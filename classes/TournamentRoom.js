@@ -47,6 +47,7 @@ export class TournamentRoom extends SinglePlayerRoom {
       maxPlayers: MAX_PLAYERS,
     });
   }
+
   setPlayerReady(playerId, isReady) {
     if (isReady) {
       this.readyPlayers.add(playerId);
@@ -141,11 +142,9 @@ export class TournamentRoom extends SinglePlayerRoom {
     }
   }
 
-  // ✅ Sobrescribimos processPayout para que emita a todos simultáneamente
   processPayout(winningNumber) {
     console.log(`[TournamentRoom] Procesando payout para todos los jugadores`);
 
-    // Primero, calculamos los resultados para todos
     const allResults = {};
 
     this.players.forEach((player, playerId) => {
@@ -218,7 +217,6 @@ export class TournamentRoom extends SinglePlayerRoom {
     setTimeout(() => this.nextState(), 5000);
   }
 
-  // ✅ Sobrescribimos removePlayer para limpiar ready state
   removePlayer(playerId) {
     super.removePlayer(playerId);
     this.readyPlayers.delete(playerId);

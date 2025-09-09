@@ -2,6 +2,7 @@
 import * as gameManager from "../services/gameManager.js";
 
 export const tournamentHandler = (io, socket) => {
+  // ✅ Unirse a un torneo
   socket.on("tournament-join", (data, callback) => {
     const { userId, userName, balance, tournamentId = "default" } = data;
     const player = { id: userId, name: userName, balance };
