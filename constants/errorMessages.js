@@ -49,7 +49,6 @@ export const ERROR_DEFINITIONS = {
   },
 };
 
-// Función auxiliar para obtener definición por clave
 export const getErrorDefinition = (key) => {
   return ERROR_DEFINITIONS[key] || ERROR_DEFINITIONS.SERVER_ERROR;
 };
