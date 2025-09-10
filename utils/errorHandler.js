@@ -1,47 +1,109 @@
 // utils/errorHandler.js
+import { v4 as uuidv4 } from "uuid";
+import { getErrorDefinition } from "../constants/errorMessages.js";
 
 /**
- * Emite un error estructurado al cliente.
+ * Emite un error estructurado usando una clave predefinida.
+ * Centralizado, fácil de mantener, con UUID y detalles.
  *
- * @param {import("socket.io").Socket} socket - Socket del jugador
- * @param {string} type - Tipo de error: "balance", "validation", "game_state", "server"
- * @param {string} message - Mensaje descriptivo
- * @param {string} [betKey] - Opcional: clave de apuesta relacionada
+ * @param {import("socket.io").Socket} socket
+ * @param {string} errorCode - Clave del error (ej: "INSUFFICIENT_BALANCE")
+ * @param {Object} [options]
+ * @param {string} [options.betKey]
+ * @param {Object} [options.details]
+ * @param {string} [options.customMessage] - Sobreescribe el mensaje por defecto
  */
-export const emitError = (socket, type, message, betKey = null) => {
+export const emitErrorByKey = (socket, errorCode, options = {}) => {
+  const { betKey = null, details = {}, customMessage = null } = options;
+
+  const definition = getErrorDefinition(errorCode);
+  const message = customMessage || definition.message;
+
+  const errorId = uuidv4();
+
   const errorPayload = {
-    type,
+    type: definition.type,
     message,
-    id: Date.now(),
+    id: errorId,
     ...(betKey !== null && { betKey }),
+    ...(Object.keys(details).length > 0 && { details }),
   };
 
+  const logSuffix = betKey ? `(Apuesta: ${betKey})` : "";
+  const detailsLog =
+    Object.keys(details).length > 0
+      ? `\nDetalles: ${JSON.stringify(details, null, 2)}`
+      : "";
+
   console.warn(
-    `[ERROR][${type}] Jugador ${socket.id}: ${message} ${
-      betKey ? `(Apuesta: ${betKey})` : ""
-    }`
+    `[ERROR][${errorCode}][${errorId}] Jugador ${socket.id}: ${message} ${logSuffix}${detailsLog}`
   );
 
   socket.emit("bet-error", errorPayload);
+
+  console.log("📤 Backend: emitiendo bet-error a", socket.id, errorPayload);
+
+  socket.emit("bet-error", errorPayload);
+
+  return errorId;
 };
 
 /**
- * Emite un error a todos los jugadores en una sala.
- *
- * @param {import("socket.io").Namespace} io - Instancia de Socket.IO
- * @param {string} roomId - ID de la sala
- * @param {string} type - Tipo de error
- * @param {string} message - Mensaje
- * @param {string} [betKey] - Apuesta relacionada
+ * Versión broadcast
  */
-export const broadcastError = (io, roomId, type, message, betKey = null) => {
+export const broadcastErrorByKey = (io, roomId, errorCode, options = {}) => {
+  const { betKey = null, details = {}, customMessage = null } = options;
+
+  const definition = getErrorDefinition(errorCode);
+  const message = customMessage || definition.message;
+
+  const errorId = uuidv4();
+
+  const errorPayload = {
+    type: definition.type,
+    message,
+    id: errorId,
+    ...(betKey !== null && { betKey }),
+    ...(Object.keys(details).length > 0 && { details }),
+  };
+
+  const logSuffix = betKey ? `(Apuesta: ${betKey})` : "";
+  const detailsLog =
+    Object.keys(details).length > 0
+      ? `\nDetalles: ${JSON.stringify(details, null, 2)}`
+      : "";
+
+  console.warn(
+    `[BROADCAST ERROR][${errorCode}][${errorId}] Sala ${roomId}: ${message} ${logSuffix}${detailsLog}`
+  );
+
+  io.to(roomId).emit("bet-error", errorPayload);
+
+  return errorId;
+};
+
+export const emitError = (socket, type, message, options = {}) => {
+  const { betKey = null, details = {} } = options;
+  const errorId = uuidv4();
+
   const errorPayload = {
     type,
     message,
-    id: Date.now(),
+    id: errorId,
     ...(betKey !== null && { betKey }),
+    ...(Object.keys(details).length > 0 && { details }),
   };
 
-  console.warn(`[BROADCAST ERROR][${type}] Sala ${roomId}: ${message}`);
-  io.to(roomId).emit("bet-error", errorPayload);
+  const logSuffix = betKey ? `(Apuesta: ${betKey})` : "";
+  const detailsLog =
+    Object.keys(details).length > 0
+      ? `\nDetalles: ${JSON.stringify(details, null, 2)}`
+      : "";
+
+  console.warn(
+    `[ERROR][${type}][${errorId}] Jugador ${socket.id}: ${message} ${logSuffix}${detailsLog}`
+  );
+
+  socket.emit("bet-error", errorPayload);
+  return errorId;
 };

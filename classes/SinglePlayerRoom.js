@@ -1,6 +1,6 @@
 // classes/SinglePlayerRoom.js
 import { RouletteEngine } from "./RouletteEngine.js";
-import { emitError } from "../utils/errorHandler.js";
+import { emitErrorByKey } from "../utils/errorHandler.js";
 
 const GAME_STATES = {
   BETTING: "betting",
@@ -150,7 +150,6 @@ export class SinglePlayerRoom {
         time: this.timeRemaining,
       });
 
-      // ✅ Solo iniciar countdown si NO es modo manual
       if (!this.manualMode) this.startCountdown();
     }
   }
@@ -231,7 +230,7 @@ export class SinglePlayerRoom {
       const balanceAfterPayout = player.balance;
       const totalNetResult = totalWinnings - totalBetAmount;
 
-      // 🔍 LOGS DETALLADOS
+      // Logs detallados
       console.log(
         "------------------------------------------------------------"
       );
@@ -254,7 +253,6 @@ export class SinglePlayerRoom {
         const status = bet.result === "win" ? "GANÓ" : "PERDIÓ";
         const multiplier =
           bet.profitMultiplier > 0 ? `(${bet.profitMultiplier}:1)` : "";
-
         if (bet.result === "win") {
           console.log(
             `- ${bet.betKey} | ${bet.amount} | ${status} ${multiplier} | Ganancia: +${bet.winnings} | Total recibido: ${bet.totalReceived}`
@@ -276,19 +274,8 @@ export class SinglePlayerRoom {
       );
       console.log(`Balance después: ${balanceAfterPayout}`);
 
-      let resultStatus;
-      if (playerBets.size === 0) {
-        resultStatus = "no_bet";
-        console.log("🎯 resultStatus asignado: 'no_bet' (no hizo apuestas)");
-      } else if (totalWinnings > 0) {
-        resultStatus = "win";
-        console.log(
-          `🎯 resultStatus asignado: 'win' (totalWinnings > 0: ${totalWinnings})`
-        );
-      } else {
-        resultStatus = "lose";
-        console.log(`🎯 resultStatus asignado: 'lose' (totalWinnings = 0)`);
-      }
+      let resultStatus =
+        playerBets.size === 0 ? "no_bet" : totalWinnings > 0 ? "win" : "lose";
 
       const payload = {
         state: "payout",
@@ -309,18 +296,6 @@ export class SinglePlayerRoom {
         })),
       };
 
-      console.log(
-        `📤 Enviando a jugador ${player.name} (${playerId}) el estado:`,
-        {
-          resultStatus,
-          totalWinnings,
-          totalNetResult,
-          newBalance: balanceAfterPayout,
-          betCount: betResults.length,
-        }
-      );
-
-      // Emitir al jugador
       if (player.socket) {
         player.socket.emit("game-state-update", payload);
       } else {
@@ -329,7 +304,6 @@ export class SinglePlayerRoom {
 
       this.lastBets.set(playerId, new Map(playerBets));
       this.bets.set(playerId, new Map());
-
       console.log(
         "------------------------------------------------------------"
       );
@@ -343,80 +317,69 @@ export class SinglePlayerRoom {
       `[SinglePlayerRoom] placeBet llamado: ${playerId}, ${betKey}, ${amount}`
     );
 
+    // 1. Validar estado del juego
     if (this.gameState !== GAME_STATES.BETTING) {
       const socket = this.getPlayerSocket(playerId);
-      if (socket)
-        emitError(
-          socket,
-          "game_state",
-          "No se aceptan apuestas en este momento."
-        );
-      callback?.({
+      if (socket) emitErrorByKey(socket, "GAME_STATE_INVALID");
+      return callback?.({
         success: false,
         message: "No se aceptan apuestas en este momento.",
       });
-      return;
     }
 
+    // 2. Validar jugador
     const player = this.players.get(playerId);
     if (!player) {
       const socket = this.getPlayerSocket(playerId);
-      if (socket) emitError(socket, "server", "Jugador no encontrado.");
-      callback?.({
-        success: false,
-        message: "Jugador no encontrado.",
-      });
-      return;
+      if (socket) emitErrorByKey(socket, "PLAYER_NOT_FOUND");
+      return callback?.({ success: false, message: "Jugador no encontrado." });
     }
 
+    // 3. Validar saldo
     if (player.balance < amount) {
       const socket = player.socket;
-      if (socket)
-        emitError(
-          socket,
-          "balance",
-          "Saldo insuficiente para realizar esta apuesta.",
-          betKey
-        );
+      if (socket) {
+        emitErrorByKey(socket, "INSUFFICIENT_BALANCE", {
+          betKey,
+          details: { attempted: amount, currentBalance: player.balance },
+        });
+      }
       console.log(
         `🚫 [placeBet] Saldo insuficiente para ${player.name}: ${player.balance} < ${amount}`
       );
-      callback?.({
-        success: false,
-        message: "Saldo insuficiente.",
-      });
-      return;
+      return callback?.({ success: false, message: "Saldo insuficiente." });
     }
 
-    if (!this.bets.has(playerId)) {
-      this.bets.set(playerId, new Map());
-    }
+    // 4. ✅ Validación centralizada de reglas de negocio
+    if (!this.bets.has(playerId)) this.bets.set(playerId, new Map());
     const playerBets = this.bets.get(playerId);
+    const validation = this.rouletteEngine.isBetAllowedDetailed(
+      betKey,
+      playerBets,
+      amount
+    );
 
-    if (!this.rouletteEngine.isBetAllowed(betKey, playerBets)) {
-      console.log(`🚫 Apuesta no permitida: ${betKey}`);
+    if (!validation.allowed) {
       const socket = player.socket;
-      if (socket)
-        emitError(
-          socket,
-          "validation",
-          "Apuesta no permitida en esta combinación.",
-          betKey
-        );
-      callback?.({
+      if (socket) {
+        emitErrorByKey(socket, validation.reasonCode || "BET_NOT_ALLOWED", {
+          betKey,
+          details: { ...validation.details, betKey },
+        });
+      }
+      return callback?.({
         success: false,
-        message: "Apuesta no permitida.",
+        message: validation.details?.reason || "Apuesta no permitida.",
       });
-      return;
     }
 
+    // 5. ✅ Procesar apuesta válida
     const currentAmount = playerBets.get(betKey) || 0;
     playerBets.set(betKey, currentAmount + amount);
     player.balance -= amount;
 
-    if (!this.lastBets.has(playerId)) {
-      this.lastBets.set(playerId, new Map());
-    }
+    // Registrar en lastBets
+    if (!this.lastBets.has(playerId)) this.lastBets.set(playerId, new Map());
     const lastPlayerBets = this.lastBets.get(playerId);
     lastPlayerBets.set(betKey, (lastPlayerBets.get(betKey) || 0) + amount);
 
@@ -424,6 +387,7 @@ export class SinglePlayerRoom {
       `🟢 [placeBet] Jugador ${player.name} apostó ${amount} a ${betKey}. Nuevo balance: ${player.balance}`
     );
 
+    // Preparar respuesta
     const betsArray = Array.from(playerBets, ([key, val]) => ({
       betKey: key,
       amount: val,
@@ -438,38 +402,24 @@ export class SinglePlayerRoom {
       });
     }
 
-    // ✅ Enviar ACK de éxito
-    callback?.({
-      success: true,
-      newBalance: player.balance,
-    });
+    callback?.({ success: true, newBalance: player.balance });
   }
 
   clearBets(playerId, callback) {
     if (this.gameState !== GAME_STATES.BETTING) {
       const socket = this.getPlayerSocket(playerId);
-      if (socket)
-        emitError(
-          socket,
-          "game_state",
-          "No se aceptan apuestas en este momento."
-        );
-      callback?.({
+      if (socket) emitErrorByKey(socket, "GAME_STATE_INVALID");
+      return callback?.({
         success: false,
         message: "No se aceptan apuestas en este momento.",
       });
-      return;
     }
 
     const player = this.players.get(playerId);
     if (!player) {
       const socket = this.getPlayerSocket(playerId);
-      if (socket) emitError(socket, "server", "Jugador no encontrado.");
-      callback?.({
-        success: false,
-        message: "Jugador no encontrado.",
-      });
-      return;
+      if (socket) emitErrorByKey(socket, "PLAYER_NOT_FOUND");
+      return callback?.({ success: false, message: "Jugador no encontrado." });
     }
 
     console.log(
@@ -504,70 +454,51 @@ export class SinglePlayerRoom {
       player.socket.emit("bets-cleared", { newBalance: player.balance });
     }
 
-    // ✅ ACK de éxito
-    callback?.({
-      success: true,
-      newBalance: player.balance,
-    });
+    callback?.({ success: true, newBalance: player.balance });
   }
 
   undoBet(playerId, callback) {
     if (this.gameState !== GAME_STATES.BETTING) {
       const socket = this.getPlayerSocket(playerId);
-      if (socket)
-        emitError(
-          socket,
-          "game_state",
-          "No se aceptan apuestas en este momento."
-        );
-      callback?.({
+      if (socket) emitErrorByKey(socket, "GAME_STATE_INVALID");
+      return callback?.({
         success: false,
         message: "No se aceptan apuestas en este momento.",
       });
-      return;
     }
 
     if (!this.bets.has(playerId)) {
       const socket = this.getPlayerSocket(playerId);
-      if (socket)
-        emitError(socket, "validation", "No hay apuestas para deshacer.");
-      callback?.({
+      if (socket) emitErrorByKey(socket, "NO_BETS_TO_UNDO");
+      return callback?.({
         success: false,
         message: "No hay apuestas para deshacer.",
       });
-      return;
     }
 
     const playerBets = this.bets.get(playerId);
     const lastEntry = Array.from(playerBets.entries()).pop();
     if (!lastEntry) {
       const socket = this.getPlayerSocket(playerId);
-      if (socket)
-        emitError(socket, "validation", "No hay apuestas para deshacer.");
-      callback?.({
+      if (socket) emitErrorByKey(socket, "NO_BETS_TO_UNDO");
+      return callback?.({
         success: false,
         message: "No hay apuestas para deshacer.",
       });
-      return;
     }
 
     const [betKey, amount] = lastEntry;
-
     console.log(`[undoBet] Deshaciendo última apuesta: ${betKey} -> ${amount}`);
     playerBets.delete(betKey);
+
     const player = this.players.get(playerId);
     if (!player) {
       const socket = this.getPlayerSocket(playerId);
-      if (socket) emitError(socket, "server", "Jugador no encontrado.");
-      callback?.({
-        success: false,
-        message: "Jugador no encontrado.",
-      });
-      return;
+      if (socket) emitErrorByKey(socket, "PLAYER_NOT_FOUND");
+      return callback?.({ success: false, message: "Jugador no encontrado." });
     }
 
     player.updateBalance(amount);
-
     console.log(`[undoBet] Apuestas restantes:`, [...playerBets.entries()]);
     console.log(
       `[undoBet] Nuevo balance del jugador ${player.name}:`,
@@ -581,73 +512,50 @@ export class SinglePlayerRoom {
       });
     }
 
-    // ✅ ACK de éxito
-    callback?.({
-      success: true,
-      newBalance: player.balance,
-    });
+    callback?.({ success: true, newBalance: player.balance });
   }
 
   repeatBet(playerId, callback) {
     if (this.gameState !== GAME_STATES.BETTING) {
       const socket = this.getPlayerSocket(playerId);
-      if (socket)
-        emitError(
-          socket,
-          "game_state",
-          "No se aceptan apuestas en este momento."
-        );
-      callback?.({
+      if (socket) emitErrorByKey(socket, "GAME_STATE_INVALID");
+      return callback?.({
         success: false,
         message: "No se aceptan apuestas en este momento.",
       });
-      return;
     }
 
     const player = this.players.get(playerId);
     if (!player) {
       const socket = this.getPlayerSocket(playerId);
-      if (socket) emitError(socket, "server", "Jugador no encontrado.");
-      callback?.({
-        success: false,
-        message: "Jugador no encontrado.",
-      });
-      return;
+      if (socket) emitErrorByKey(socket, "PLAYER_NOT_FOUND");
+      return callback?.({ success: false, message: "Jugador no encontrado." });
     }
 
     const lastBets = this.lastBets.get(playerId);
     if (!lastBets || lastBets.size === 0) {
       const socket = player.socket;
-      if (socket)
-        emitError(socket, "validation", "No hay apuestas para repetir.");
-      callback?.({
+      if (socket) emitErrorByKey(socket, "NO_BETS_TO_REPEAT");
+      return callback?.({
         success: false,
         message: "No hay apuestas para repetir.",
       });
-      return;
     }
 
     let totalAmount = 0;
     lastBets.forEach((amount) => (totalAmount += amount));
     if (player.balance < totalAmount) {
       const socket = player.socket;
-      if (socket)
-        emitError(
-          socket,
-          "balance",
-          "Saldo insuficiente para repetir apuestas."
-        );
-      callback?.({
-        success: false,
-        message: "Saldo insuficiente.",
-      });
-      return;
+      if (socket) {
+        emitErrorByKey(socket, "INSUFFICIENT_BALANCE", {
+          details: { attempted: totalAmount, currentBalance: player.balance },
+        });
+      }
+      return callback?.({ success: false, message: "Saldo insuficiente." });
     }
 
     const repeatedBets = new Map();
-    lastBets.forEach((amount, betKey) => {
-      repeatedBets.set(betKey, amount);
-    });
+    lastBets.forEach((amount, betKey) => repeatedBets.set(betKey, amount));
 
     this.bets.set(playerId, repeatedBets);
     player.balance -= totalAmount;
@@ -665,78 +573,58 @@ export class SinglePlayerRoom {
       });
     }
 
-    // ✅ ACK de éxito
-    callback?.({
-      success: true,
-      newBalance: player.balance,
-    });
+    callback?.({ success: true, newBalance: player.balance });
   }
 
   doubleBet(playerId, callback) {
     if (this.gameState !== GAME_STATES.BETTING) {
       const socket = this.getPlayerSocket(playerId);
-      if (socket)
-        emitError(
-          socket,
-          "game_state",
-          "No se aceptan apuestas en este momento."
-        );
-      callback?.({
+      if (socket) emitErrorByKey(socket, "GAME_STATE_INVALID");
+      return callback?.({
         success: false,
         message: "No se aceptan apuestas en este momento.",
       });
-      return;
     }
 
     if (!this.bets.has(playerId)) {
       const socket = this.getPlayerSocket(playerId);
-      if (socket)
-        emitError(socket, "validation", "No hay apuestas para duplicar.");
-      callback?.({
+      if (socket) emitErrorByKey(socket, "NO_BETS_TO_UNDO");
+      return callback?.({
         success: false,
         message: "No hay apuestas para duplicar.",
       });
-      return;
     }
 
     const playerBets = this.bets.get(playerId);
     const player = this.players.get(playerId);
     if (!player) {
       const socket = this.getPlayerSocket(playerId);
-      if (socket) emitError(socket, "server", "Jugador no encontrado.");
-      callback?.({
-        success: false,
-        message: "Jugador no encontrado.",
-      });
-      return;
+      if (socket) emitErrorByKey(socket, "PLAYER_NOT_FOUND");
+      return callback?.({ success: false, message: "Jugador no encontrado." });
     }
 
     let totalAdditionalBet = 0;
-    playerBets.forEach((amount) => {
-      totalAdditionalBet += amount;
-    });
+    playerBets.forEach((amount) => (totalAdditionalBet += amount));
 
     if (player.balance < totalAdditionalBet) {
       const socket = player.socket;
-      if (socket)
-        emitError(
-          socket,
-          "balance",
-          "Saldo insuficiente para duplicar las apuestas."
-        );
+      if (socket) {
+        emitErrorByKey(socket, "INSUFFICIENT_BALANCE", {
+          details: {
+            attempted: totalAdditionalBet,
+            currentBalance: player.balance,
+          },
+        });
+      }
       console.warn(
         `[doubleBet] Jugador ${player.name} no tiene saldo suficiente para duplicar todas las apuestas.`
       );
-      callback?.({
-        success: false,
-        message: "Saldo insuficiente.",
-      });
-      return;
+      return callback?.({ success: false, message: "Saldo insuficiente." });
     }
 
     // Duplicar cada apuesta
     Array.from(playerBets.entries()).forEach(([betKey, amount]) => {
-      this.placeBet(playerId, betKey, amount, () => {}); // callback vacío porque ya manejamos el estado aquí
+      this.placeBet(playerId, betKey, amount, () => {});
     });
 
     const updatedBets = this.bets.get(playerId) || new Map();
@@ -758,11 +646,7 @@ export class SinglePlayerRoom {
       `[doubleBet] Jugador ${player.name} duplicó apuestas. Nuevo balance: ${player.balance}, Total apostado: ${totalBet}`
     );
 
-    // ✅ ACK de éxito
-    callback?.({
-      success: true,
-      newBalance: player.balance,
-    });
+    callback?.({ success: true, newBalance: player.balance });
   }
 
   peekQueue(count = 20) {

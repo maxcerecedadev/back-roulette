@@ -30,7 +30,7 @@ export class BetLimits {
   /**
    * Devuelve un nombre amigable para mostrar al usuario según el tipo de apuesta.
    * @param {string} betKey - Ej: "straight_17", "even_money_red"
-   * @returns {string} - Nombre legible: "número pleno", "chance doble", etc.
+   * @returns {string} - Nombre legible
    */
   static getBetTypeName(betKey) {
     if (betKey.startsWith("straight_")) return "apuesta directa";
@@ -40,5 +40,30 @@ export class BetLimits {
       return "apuesta de docena o columna";
     if (betKey.startsWith("even_money_")) return "apuesta de dinero par";
     return "esta apuesta";
+  }
+
+  /**
+   * Valida si el monto total propuesto (existente + nuevo) excede el límite.
+   * @param {string} betKey
+   * @param {Map<string, number>} existingBets - Mapa de apuestas actuales del jugador
+   * @param {number} newAmount - Monto que se quiere apostar ahora
+   * @returns {{ allowed: boolean, maxAllowed?: number, currentAmount?: number, proposedTotal?: number }}
+   */
+  static validateBetAmount(betKey, existingBets, newAmount) {
+    const maxAllowed = this.getMaxBetForType(betKey);
+    const currentAmount = existingBets.get(betKey) || 0;
+    const proposedTotal = currentAmount + newAmount;
+
+    if (proposedTotal > maxAllowed) {
+      return {
+        allowed: false,
+        maxAllowed,
+        currentAmount,
+        proposedTotal,
+        betType: this.getBetTypeName(betKey),
+      };
+    }
+
+    return { allowed: true };
   }
 }

@@ -1,7 +1,7 @@
 // classes/RouletteEngine.js
-
 import { BetValidator } from "./BetValidator.js";
 import { BetPayoutCalculator } from "./BetPayoutCalculator.js";
+import { BetLimits } from "./BetLimits.js";
 
 export class RouletteEngine {
   static RED_NUMBERS = new Set([
@@ -16,13 +16,14 @@ export class RouletteEngine {
   static CONFLICTING_BETS = BetValidator.CONFLICTING_BETS;
 
   /**
-   * @param {number} queueSize - El tamaño de la cola de resultados futuros.
+   * @param {number} queueSize
    */
   constructor(queueSize = 10) {
     this.queueSize = queueSize;
     this.resultsQueue = [];
     this.fillQueue();
   }
+
   /**
    * Genera un número aleatorio de la ruleta (0-36).
    * @returns {number} El número aleatorio.
@@ -30,22 +31,22 @@ export class RouletteEngine {
   generateRandomNumber() {
     return Math.floor(Math.random() * 37);
   }
+
   /**
    * Determina el color de un número de la ruleta.
    * @param {number} number - El número de la ruleta.
    * @returns {string} El color ('red', 'black', 'green').
    */
-
   numberToColor(number) {
     if (number === 0) return "green";
     if (RouletteEngine.RED_NUMBERS.has(number)) return "red";
     return "black";
   }
+
   /**
    * Genera un resultado completo (número y color).
    * @returns {object} Un objeto con el número y el color.
    */
-
   generateResult() {
     const number = this.generateRandomNumber();
     const color = this.numberToColor(number);
@@ -66,7 +67,6 @@ export class RouletteEngine {
    * Obtiene el próximo resultado de la cola y la rellena.
    * @returns {object} El próximo resultado.
    */
-
   getNextWinningNumber() {
     if (this.resultsQueue.length === 0) this.fillQueue();
     const result = this.resultsQueue.shift();
@@ -78,7 +78,6 @@ export class RouletteEngine {
    * Muestra los resultados futuros sin eliminarlos de la cola.
    * @returns {Array<object>} Una copia de la cola de resultados.
    */
-
   peekQueue() {
     return [...this.resultsQueue];
   }
@@ -99,12 +98,56 @@ export class RouletteEngine {
   }
 
   /**
+   * ✅ NUEVO: Valida una apuesta con detalles (límites + combinaciones)
+   * @param {string} betKey
+   * @param {Map<string, number>} existingBets
+   * @param {number} newAmount
+   * @returns {{
+   *   allowed: boolean,
+   *   reasonCode?: string,
+   *   details?: any
+   * }}
+   */
+  isBetAllowedDetailed(betKey, existingBets, newAmount = 0) {
+    // 1. Validar límites de apuesta (si se pasa newAmount)
+    if (newAmount > 0) {
+      const limitValidation = BetLimits.validateBetAmount(
+        betKey,
+        existingBets,
+        newAmount
+      );
+      if (!limitValidation.allowed) {
+        return {
+          allowed: false,
+          reasonCode: "BET_TYPE_LIMIT_EXCEEDED",
+          details: limitValidation,
+        };
+      }
+    }
+
+    // 2. Validar combinaciones (conflictos, docenas/columnas, etc.)
+    if (!BetValidator.isBetAllowed(betKey, existingBets)) {
+      return {
+        allowed: false,
+        reasonCode: "BET_NOT_ALLOWED",
+        details: {
+          betKey,
+          reason: "Apuesta no permitida en esta combinación.",
+        },
+      };
+    }
+
+    return { allowed: true };
+  }
+
+  /**
    * Verifica si una apuesta nueva es permitida según las apuestas existentes.
    * @param {string} betKey - La clave de la apuesta a verificar.
    * @param {Map<string, number>} existingBets - Mapa de apuestas actuales del jugador.
    * @returns {boolean} `true` si la apuesta es válida, `false` si hay conflicto con otras apuestas.
    */
   isBetAllowed(betKey, existingBets) {
-    return BetValidator.isBetAllowed(betKey, existingBets);
+    const result = this.isBetAllowedDetailed(betKey, existingBets, 0);
+    return result.allowed;
   }
 }
