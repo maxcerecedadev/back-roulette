@@ -25,4 +25,19 @@ router.get("/peek/:roomId", adminAuth, (req, res) => {
   }
   res.json({ roomId, nextResults: results });
 });
+
+//  Eliminar una sala por ID
+
+router.delete("/:roomId", adminAuth, (req, res) => {
+  const { roomId } = req.params;
+
+  const wasRemoved = gameManager.removeRoom(roomId);
+
+  if (!wasRemoved) {
+    return res.status(404).json({ error: "Sala no encontrada." });
+  }
+
+  res.json({ message: `Sala ${roomId} eliminada con éxito.` });
+});
+
 export default router;

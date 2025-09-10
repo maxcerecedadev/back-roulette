@@ -36,8 +36,22 @@ export const getRoom = (roomId) => {
  */
 export const removeRoom = (roomId) => {
   if (rooms.has(roomId)) {
+    const room = rooms.get(roomId);
+
+    room.players.forEach((player) => {
+      const socket = player.socket;
+      if (socket && socket.connected) {
+        socket.emit("room-deleted", {
+          reason: "deleted_by_admin",
+          message: "La sala ha sido eliminada por el administrador.",
+        });
+        socket.disconnect(true);
+      }
+    });
+
+    room.stopCountdown?.();
     rooms.delete(roomId);
-    console.log(`Sala ${roomId} eliminada.`);
+    console.log(`🚪 Sala ${roomId} eliminada.`);
     return true;
   }
   return false;
