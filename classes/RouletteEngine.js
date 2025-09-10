@@ -15,6 +15,71 @@ export class RouletteEngine {
   static DOZEN_BET_KEYS = ["dozen_1", "dozen_2", "dozen_3"];
   static CONFLICTING_BETS = BetValidator.CONFLICTING_BETS;
 
+  // 👇 MAPA DE TRADUCCIÓN: betKey → nombre amigable en español
+  static BET_KEY_NAMES = {
+    even_money_red: "rojo",
+    even_money_black: "negro",
+    even_money_even: "par",
+    even_money_odd: "impar",
+    even_money_low: "1-18",
+    even_money_high: "19-36",
+    dozen_1: "1ra docena (1-12)",
+    dozen_2: "2da docena (13-24)",
+    dozen_3: "3ra docena (25-36)",
+    column_1: "columna 1",
+    column_2: "columna 2",
+    column_3: "columna 3",
+    straight_0: "número 0",
+    straight_1: "número 1",
+    straight_2: "número 2",
+    straight_3: "número 3",
+    straight_4: "número 4",
+    straight_5: "número 5",
+    straight_6: "número 6",
+    straight_7: "número 7",
+    straight_8: "número 8",
+    straight_9: "número 9",
+    straight_10: "número 10",
+    straight_11: "número 11",
+    straight_12: "número 12",
+    straight_13: "número 13",
+    straight_14: "número 14",
+    straight_15: "número 15",
+    straight_16: "número 16",
+    straight_17: "número 17",
+    straight_18: "número 18",
+    straight_19: "número 19",
+    straight_20: "número 20",
+    straight_21: "número 21",
+    straight_22: "número 22",
+    straight_23: "número 23",
+    straight_24: "número 24",
+    straight_25: "número 25",
+    straight_26: "número 26",
+    straight_27: "número 27",
+    straight_28: "número 28",
+    straight_29: "número 29",
+    straight_30: "número 30",
+    straight_31: "número 31",
+    straight_32: "número 32",
+    straight_33: "número 33",
+    straight_34: "número 34",
+    straight_35: "número 35",
+    straight_36: "número 36",
+  };
+
+  // 👇 FUNCIÓN AUXILIAR: Reemplaza betKeys por nombres amigables en mensajes
+  static humanizeBetKeyInMessage(message) {
+    if (!message || typeof message !== "string") return message;
+
+    for (const [key, name] of Object.entries(this.BET_KEY_NAMES)) {
+      const regex = new RegExp(`\\b${key}\\b`, "g");
+      message = message.replace(regex, name);
+    }
+
+    return message;
+  }
+
   /**
    * @param {number} queueSize
    */
@@ -126,13 +191,41 @@ export class RouletteEngine {
     }
 
     // 2. Validar combinaciones (conflictos, docenas/columnas, etc.)
-    if (!BetValidator.isBetAllowed(betKey, existingBets)) {
+    const betValidation = BetValidator.isBetAllowedDetailed(
+      betKey,
+      existingBets
+    );
+    if (!betValidation.allowed) {
+      // Inferir reasonCode según contenido del mensaje
+      let reasonCode = "BET_NOT_ALLOWED";
+
+      if (betValidation.reason?.includes("cubriría")) {
+        reasonCode = "BET_COVERAGE_EXCEEDED";
+      } else if (
+        betValidation.reason?.includes("Conflicto") ||
+        betValidation.reason?.includes("simultáneamente") ||
+        betValidation.reason?.includes("combinar") ||
+        betValidation.reason?.includes("rojo y negro") ||
+        betValidation.reason?.includes("par e impar") ||
+        betValidation.reason?.includes("1-18 y 19-36") ||
+        betValidation.reason?.includes("docenas") ||
+        betValidation.reason?.includes("columnas")
+      ) {
+        reasonCode = "BET_CONFLICT";
+      }
+
+      // 👇 HUMANIZAMOS EL MENSAJE antes de enviarlo
+      const humanizedReason = this.constructor.humanizeBetKeyInMessage(
+        betValidation.reason
+      );
+
       return {
         allowed: false,
-        reasonCode: "BET_NOT_ALLOWED",
+        reasonCode,
         details: {
           betKey,
-          reason: "Apuesta no permitida en esta combinación.",
+          reason: humanizedReason, // ✅ Ahora en español amigable
+          ...(betValidation.coverage && { coverage: betValidation.coverage }),
         },
       };
     }

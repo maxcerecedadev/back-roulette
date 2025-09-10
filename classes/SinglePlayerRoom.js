@@ -1,6 +1,7 @@
 // classes/SinglePlayerRoom.js
 import { RouletteEngine } from "./RouletteEngine.js";
 import { emitErrorByKey } from "../utils/errorHandler.js";
+import { BetLimits } from "./BetLimits.js";
 
 const GAME_STATES = {
   BETTING: "betting",
@@ -312,12 +313,11 @@ export class SinglePlayerRoom {
     setTimeout(() => this.nextState(), 5000);
   }
 
-  placeBet(playerId, betKey, amount, callback) {
+  placeBet(playerId, betKey, amount, callback, isIncreaseOnly = false) {
     console.log(
       `[SinglePlayerRoom] placeBet llamado: ${playerId}, ${betKey}, ${amount}`
     );
 
-    // 1. Validar estado del juego
     if (this.gameState !== GAME_STATES.BETTING) {
       const socket = this.getPlayerSocket(playerId);
       if (socket) emitErrorByKey(socket, "GAME_STATE_INVALID");
@@ -327,7 +327,6 @@ export class SinglePlayerRoom {
       });
     }
 
-    // 2. Validar jugador
     const player = this.players.get(playerId);
     if (!player) {
       const socket = this.getPlayerSocket(playerId);
@@ -335,13 +334,29 @@ export class SinglePlayerRoom {
       return callback?.({ success: false, message: "Jugador no encontrado." });
     }
 
-    // 3. Validar saldo
+    const buildStateSnapshot = () => {
+      const playerBets = this.bets.get(playerId) || new Map();
+      const betsArray = Array.from(playerBets, ([key, val]) => ({
+        betKey: key,
+        amount: val,
+      }));
+      const totalBet = betsArray.reduce((s, b) => s + b.amount, 0);
+
+      return {
+        balance: player.balance,
+        bets: betsArray,
+        totalBet,
+      };
+    };
+
     if (player.balance < amount) {
       const socket = player.socket;
       if (socket) {
         emitErrorByKey(socket, "INSUFFICIENT_BALANCE", {
           betKey,
-          details: { attempted: amount, currentBalance: player.balance },
+          amount,
+          details: { currentBalance: player.balance },
+          state: buildStateSnapshot(),
         });
       }
       console.log(
@@ -350,30 +365,68 @@ export class SinglePlayerRoom {
       return callback?.({ success: false, message: "Saldo insuficiente." });
     }
 
-    // 4. ✅ Validación centralizada de reglas de negocio
     if (!this.bets.has(playerId)) this.bets.set(playerId, new Map());
     const playerBets = this.bets.get(playerId);
-    const validation = this.rouletteEngine.isBetAllowedDetailed(
-      betKey,
-      playerBets,
-      amount
+
+    console.log(
+      `[DEBUG] Apuestas actuales de ${player.name} ANTES de validar:`
     );
+    Array.from(playerBets.entries()).forEach(([key, val]) => {
+      console.log(`   - ${key}: $${val}`);
+    });
+
+    let validation;
+    if (isIncreaseOnly && playerBets.has(betKey)) {
+      const limitValidation = BetLimits.validateBetAmount(
+        betKey,
+        playerBets,
+        amount
+      );
+      validation = {
+        allowed: limitValidation.allowed,
+        reasonCode: limitValidation.allowed
+          ? undefined
+          : "BET_TYPE_LIMIT_EXCEEDED",
+        details: limitValidation,
+      };
+    } else {
+      // Validar todo (cobertura, conflictos, límites)
+      validation = this.rouletteEngine.isBetAllowedDetailed(
+        betKey,
+        playerBets,
+        amount
+      );
+    }
 
     if (!validation.allowed) {
       const socket = player.socket;
       if (socket) {
         emitErrorByKey(socket, validation.reasonCode || "BET_NOT_ALLOWED", {
           betKey,
+          amount,
           details: { ...validation.details, betKey },
+          state: buildStateSnapshot(),
         });
       }
+
+      // 👇 LOG 2: Detalle de por qué falló
+      console.log(
+        `[DEBUG] Validación FALLIDA para ${betKey}:`,
+        validation.details?.reason || "Razón desconocida"
+      );
+      if (validation.details?.coverage) {
+        console.log(
+          `[DEBUG] Cobertura: actual=${validation.details.coverage.current}, con nueva=${validation.details.coverage.withNew}, máximo=${validation.details.coverage.max}`
+        );
+      }
+
       return callback?.({
         success: false,
         message: validation.details?.reason || "Apuesta no permitida.",
       });
     }
 
-    // 5. ✅ Procesar apuesta válida
+    // 5. ✅ Registrar apuesta
     const currentAmount = playerBets.get(betKey) || 0;
     playerBets.set(betKey, currentAmount + amount);
     player.balance -= amount;
@@ -386,6 +439,14 @@ export class SinglePlayerRoom {
     console.log(
       `🟢 [placeBet] Jugador ${player.name} apostó ${amount} a ${betKey}. Nuevo balance: ${player.balance}`
     );
+
+    // 👇 LOG 3: Apuestas actuales DESPUÉS de registrar
+    console.log(
+      `[DEBUG] Apuestas actuales de ${player.name} DESPUÉS de apostar:`
+    );
+    Array.from(playerBets.entries()).forEach(([key, val]) => {
+      console.log(`   - ${key}: $${val}`);
+    });
 
     // Preparar respuesta
     const betsArray = Array.from(playerBets, ([key, val]) => ({
@@ -450,8 +511,13 @@ export class SinglePlayerRoom {
       player.balance
     );
 
+    // 👇 EMITIR EVENTO AL FRONTEND
     if (player.socket) {
-      player.socket.emit("bets-cleared", { newBalance: player.balance });
+      player.socket.emit("bets-cleared", {
+        newBalance: player.balance,
+        bets: [], // apuestas vacías
+        totalBet: 0,
+      });
     }
 
     callback?.({ success: true, newBalance: player.balance });
@@ -609,24 +675,84 @@ export class SinglePlayerRoom {
     if (player.balance < totalAdditionalBet) {
       const socket = player.socket;
       if (socket) {
+        // 👇 EMITIR ERROR CON STATE
         emitErrorByKey(socket, "INSUFFICIENT_BALANCE", {
           details: {
             attempted: totalAdditionalBet,
             currentBalance: player.balance,
+          },
+          state: {
+            balance: player.balance,
+            bets: Array.from(playerBets, ([key, val]) => ({
+              betKey: key,
+              amount: val,
+            })),
+            totalBet: Array.from(playerBets.values()).reduce(
+              (sum, amt) => sum + amt,
+              0
+            ),
           },
         });
       }
       console.warn(
         `[doubleBet] Jugador ${player.name} no tiene saldo suficiente para duplicar todas las apuestas.`
       );
+      // 👇 LLAMAR AL CALLBACK CON ERROR
       return callback?.({ success: false, message: "Saldo insuficiente." });
     }
 
-    // Duplicar cada apuesta
-    Array.from(playerBets.entries()).forEach(([betKey, amount]) => {
-      this.placeBet(playerId, betKey, amount, () => {});
-    });
+    // 👇 Validar solo límites de monto (no cobertura ni conflictos)
+    const limitErrors = [];
+    for (const [betKey, amount] of playerBets.entries()) {
+      const limitValidation = BetLimits.validateBetAmount(
+        betKey,
+        playerBets,
+        amount
+      );
 
+      if (!limitValidation.allowed) {
+        limitErrors.push({
+          betKey,
+          reason: `Límite excedido para ${betKey}: máximo ${limitValidation.maxAllowed}, intentado ${limitValidation.proposedTotal}`,
+        });
+      }
+    }
+
+    if (limitErrors.length > 0) {
+      const socket = player.socket;
+      if (socket) {
+        // 👇 EMITIR ERROR CON STATE
+        emitErrorByKey(socket, "BET_TYPE_LIMIT_EXCEEDED", {
+          details: {
+            reason: limitErrors[0].reason,
+            limitErrors,
+          },
+          state: {
+            balance: player.balance,
+            bets: Array.from(playerBets, ([key, val]) => ({
+              betKey: key,
+              amount: val,
+            })),
+            totalBet: Array.from(playerBets.values()).reduce(
+              (sum, amt) => sum + amt,
+              0
+            ),
+          },
+        });
+      }
+      // 👇 LLAMAR AL CALLBACK CON ERROR
+      return callback?.({
+        success: false,
+        message: limitErrors[0].reason,
+      });
+    }
+
+    // 👇 Duplicar cada apuesta — usar isIncreaseOnly = true
+    for (const [betKey, amount] of playerBets.entries()) {
+      this.placeBet(playerId, betKey, amount, () => {}, true);
+    }
+
+    // 👇 Obtener estado actualizado después de placeBet
     const updatedBets = this.bets.get(playerId) || new Map();
     const betsArray = Array.from(updatedBets, ([key, val]) => ({
       betKey: key,

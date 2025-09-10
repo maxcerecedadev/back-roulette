@@ -7,14 +7,20 @@ import { getErrorDefinition } from "../constants/errorMessages.js";
  * Centralizado, fácil de mantener, con UUID y detalles.
  *
  * @param {import("socket.io").Socket} socket
- * @param {string} errorCode - Clave del error (ej: "INSUFFICIENT_BALANCE")
+ * @param {string} errorCode
  * @param {Object} [options]
  * @param {string} [options.betKey]
  * @param {Object} [options.details]
- * @param {string} [options.customMessage] - Sobreescribe el mensaje por defecto
+ * @param {string} [options.customMessage]
+ * @param {Object} [options.state]
  */
 export const emitErrorByKey = (socket, errorCode, options = {}) => {
-  const { betKey = null, details = {}, customMessage = null } = options;
+  const {
+    betKey = null,
+    details = {},
+    customMessage = null,
+    state = null, // 👈 añadimos
+  } = options;
 
   const definition = getErrorDefinition(errorCode);
   const message = customMessage || definition.message;
@@ -27,6 +33,7 @@ export const emitErrorByKey = (socket, errorCode, options = {}) => {
     id: errorId,
     ...(betKey !== null && { betKey }),
     ...(Object.keys(details).length > 0 && { details }),
+    ...(state && { state }),
   };
 
   const logSuffix = betKey ? `(Apuesta: ${betKey})` : "";
@@ -42,42 +49,6 @@ export const emitErrorByKey = (socket, errorCode, options = {}) => {
   socket.emit("bet-error", errorPayload);
 
   console.log("📤 Backend: emitiendo bet-error a", socket.id, errorPayload);
-
-  socket.emit("bet-error", errorPayload);
-
-  return errorId;
-};
-
-/**
- * Versión broadcast
- */
-export const broadcastErrorByKey = (io, roomId, errorCode, options = {}) => {
-  const { betKey = null, details = {}, customMessage = null } = options;
-
-  const definition = getErrorDefinition(errorCode);
-  const message = customMessage || definition.message;
-
-  const errorId = uuidv4();
-
-  const errorPayload = {
-    type: definition.type,
-    message,
-    id: errorId,
-    ...(betKey !== null && { betKey }),
-    ...(Object.keys(details).length > 0 && { details }),
-  };
-
-  const logSuffix = betKey ? `(Apuesta: ${betKey})` : "";
-  const detailsLog =
-    Object.keys(details).length > 0
-      ? `\nDetalles: ${JSON.stringify(details, null, 2)}`
-      : "";
-
-  console.warn(
-    `[BROADCAST ERROR][${errorCode}][${errorId}] Sala ${roomId}: ${message} ${logSuffix}${detailsLog}`
-  );
-
-  io.to(roomId).emit("bet-error", errorPayload);
 
   return errorId;
 };
