@@ -2,6 +2,7 @@
 import { RouletteEngine } from "./RouletteEngine.js";
 import { emitErrorByKey } from "../utils/errorHandler.js";
 import { BetLimits } from "./BetLimits.js";
+import prisma from "../prisma/index.js";
 
 const GAME_STATES = {
   BETTING: "betting",
@@ -39,6 +40,8 @@ export class SinglePlayerRoom {
       throw new Error("Esta sala es solo para un jugador.");
     player.socket = socket;
     player.socketId = socket.id;
+    player.ip = socket.handshake.address || "unknown";
+
     this.players.set(player.id, player);
     socket.emit("player-initialized", player.toSocketData());
     this.broadcast("game-state-update", {
@@ -207,6 +210,40 @@ export class SinglePlayerRoom {
 
       this.lastBets.set(playerId, new Map(playerBets));
       this.bets.set(playerId, new Map());
+
+      const balanceBefore = balanceAfterPayout - totalWinnings + totalBetAmount;
+
+      const roundData = {
+        playerId: player.id,
+        sessionId: this.id,
+        roundId: `${this.id}_${Date.now()}`,
+        gameState: "PAYOUT",
+        winningNumber: winningNumber.number,
+        winningColor: winningNumber.color,
+        totalBetAmount,
+        totalWinnings,
+        netResult: totalNetResult,
+        betResults,
+        playerBalanceBefore: balanceBefore,
+        playerBalanceAfter: balanceAfterPayout,
+        currency: player.currency || "ARS",
+        ipAddress: player.ip || "unknown",
+        provider: "internal",
+        reference: this.id,
+        description: `Ronda finalizada. Número: ${winningNumber.number}, Color: ${winningNumber.color}`,
+      };
+
+      prisma.rouletteRound
+        .create({ data: roundData })
+        .then(() => {
+          console.log(`✅ Ronda guardada en DB para jugador ${playerId}`);
+        })
+        .catch((err) => {
+          console.error(
+            `❌ Error al guardar ronda para jugador ${playerId}:`,
+            err
+          );
+        });
     });
 
     setTimeout(() => this.nextState(), 5000);

@@ -10,8 +10,10 @@
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "dependencies": {
-    "dotenv": "^17.2.1",
+    "@prisma/client": "^6.16.0",
+    "dotenv": "^17.2.2",
     "express": "^4.19.2",
+    "prisma": "^6.16.0",
     "socket.io": "^4.7.5",
     "uuid": "^11.1.0"
   },

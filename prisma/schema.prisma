@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // o "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model RouletteRound {
+  id                String   @id @default(uuid()) 
+  playerId          String
+  sessionId         String
+  roundId           String   @unique
+  gameState         String   @default("PAYOUT")
+  winningNumber     Int
+  winningColor      String
+  totalBetAmount    Float
+  totalWinnings     Float
+  netResult         Float
+  betResults        Json
+  playerBalanceBefore Float
+  playerBalanceAfter  Float
+  currency          String   @default("ARS")
+  ipAddress         String?
+  provider          String   @default("internal")
+  reference         String?
+  description       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([playerId])
+  @@index([sessionId])
+  @@index([createdAt])
+  @@map("roulette_rounds")
+}
