@@ -41,17 +41,27 @@ export const removeRoom = (roomId) => {
     room.players.forEach((player) => {
       const socket = player.socket;
       if (socket && socket.connected) {
-        socket.emit("room-deleted", {
-          reason: "deleted_by_admin",
-          message: "La sala ha sido eliminada por el administrador.",
-        });
-        socket.disconnect(true);
+        try {
+          socket.emit("room-deleted", {
+            reason: "disconnected",
+            message:
+              "La sala ha sido eliminada porque el jugador se desconectó.",
+          });
+          socket.disconnect(true);
+        } catch (err) {
+          console.warn(
+            `⚠️ No se pudo notificar a socket ${socket.id}:`,
+            err.message
+          );
+        }
       }
     });
 
     room.stopCountdown?.();
+
     rooms.delete(roomId);
-    console.log(`🚪 Sala ${roomId} eliminada.`);
+    console.log(`🗑️ Sala ${roomId} eliminada del manager.`);
+
     return true;
   }
   return false;

@@ -5,6 +5,9 @@ import { Server as SocketServer } from "socket.io";
 import gameRoutes from "./routes/gameRoutes.js";
 import { singlePlayerHandler } from "./handlers/singlePlayerHandler.js";
 import prisma from "./prisma/index.js";
+import { config } from "dotenv";
+
+config();
 
 const PORT = process.env.PORT || 2000;
 

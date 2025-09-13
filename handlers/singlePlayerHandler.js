@@ -8,14 +8,19 @@ import * as gameManager from "../services/gameManager.js";
  * @param {object} io - La instancia completa del servidor de Socket.IO, para emitir eventos a todos los clientes.
  */
 export const singlePlayerHandler = (io, socket) => {
+  const getPlayerId = () => {
+    if (socket.player && socket.player.id) {
+      return socket.player.id;
+    }
+    return undefined;
+  };
+
   socket.on("single-join", (data, callback) => {
     const { userId, userName, balance } = data;
     const player = new Player(userId, userName, balance);
 
-    // Guardar referencia del player en el socket
     socket.player = player;
 
-    // Usar socket.id solo para la sala
     const roomId = socket.id;
 
     try {
@@ -38,8 +43,6 @@ export const singlePlayerHandler = (io, socket) => {
     }
   });
 
-  const getPlayerId = () => socket.player?.id;
-
   socket.on("place-bet", (betData) => {
     const { betKey, amount, roomId } = betData;
     const room = gameManager.getRoom(roomId);
@@ -47,32 +50,45 @@ export const singlePlayerHandler = (io, socket) => {
       socket.emit("error", { message: "No se pueden colocar apuestas ahora." });
       return;
     }
-    if (!getPlayerId()) return;
-    room.placeBet(getPlayerId(), betKey, amount);
+
+    const playerId = getPlayerId();
+    if (!playerId) {
+      console.warn(
+        `⚠️ Intento de apuesta sin jugador autenticado desde socket: ${socket.id}`
+      );
+      socket.emit("error", { message: "Jugador no autenticado." });
+      return;
+    }
+
+    room.placeBet(playerId, betKey, amount);
   });
 
   socket.on("clear-bets", ({ roomId }) => {
     const room = gameManager.getRoom(roomId);
-    if (!room || !getPlayerId()) return;
-    room.clearBets(getPlayerId());
+    const playerId = getPlayerId();
+    if (!room || !playerId) return;
+    room.clearBets(playerId);
   });
 
   socket.on("undo-bet", ({ roomId }) => {
     const room = gameManager.getRoom(roomId);
-    if (!room || !getPlayerId()) return;
-    room.undoBet(getPlayerId());
+    const playerId = getPlayerId();
+    if (!room || !playerId) return;
+    room.undoBet(playerId);
   });
 
   socket.on("repeat-bet", ({ roomId }) => {
     const room = gameManager.getRoom(roomId);
-    if (!room || !getPlayerId()) return;
-    room.repeatBet(getPlayerId());
+    const playerId = getPlayerId();
+    if (!room || !playerId) return;
+    room.repeatBet(playerId);
   });
 
   socket.on("double-bet", ({ roomId }) => {
     const room = gameManager.getRoom(roomId);
-    if (!room || !getPlayerId()) return;
-    room.doubleBet(getPlayerId());
+    const playerId = getPlayerId();
+    if (!room || !playerId) return;
+    room.doubleBet(playerId);
   });
 
   socket.on("spin", ({ roomId }) => {
@@ -89,11 +105,17 @@ export const singlePlayerHandler = (io, socket) => {
   });
 
   socket.on("disconnect", () => {
-    const room = gameManager.getRoom(socket.id);
-    if (room && getPlayerId()) {
-      room.stopCountdown();
-      room.removePlayer(getPlayerId());
-      gameManager.removeRoom(socket.id);
+    const roomId = socket.id;
+    const room = gameManager.getRoom(roomId);
+
+    if (room) {
+      if (socket.player) {
+        room.stopCountdown();
+        room.removePlayer(socket.player.id);
+      }
+
+      gameManager.removeRoom(roomId);
+      console.log(`🚪 Sala ${roomId} eliminada por desconexión.`);
     }
   });
 };
