@@ -4,8 +4,10 @@ import { createServer } from "node:http";
 import { Server as SocketServer } from "socket.io";
 import gameRoutes from "./routes/gameRoutes.js";
 import { singlePlayerHandler } from "./handlers/singlePlayerHandler.js";
+import { tournamentPlayerHandler } from "./handlers/tournamentPlayerHandler.js";
 import prisma from "./prisma/index.js";
 import { config } from "dotenv";
+import { initializeTournaments } from "./services/gameManager.js";
 
 config();
 
@@ -24,12 +26,15 @@ const io = new SocketServer(server, {
   },
 });
 
+initializeTournaments(io);
+
 app.use("/api/v1", gameRoutes);
 
 io.on("connection", (socket) => {
   console.log("🔌 Nuevo cliente conectado:", socket.id);
 
   singlePlayerHandler(io, socket);
+  tournamentPlayerHandler(io, socket);
 
   socket.on("disconnect", () => {
     console.log("🔌 Cliente desconectado:", socket.id);

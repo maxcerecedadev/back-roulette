@@ -9,7 +9,7 @@
 export const ERROR_DEFINITIONS = {
   INSUFFICIENT_BALANCE: {
     type: "balance",
-    message: "Saldo insuficiente para realizar esta apuesta.",
+    message: "Saldo insuficiente para esta operación.",
   },
   GAME_STATE_INVALID: {
     type: "game_state",
@@ -47,6 +47,14 @@ export const ERROR_DEFINITIONS = {
     type: "validation",
     message: "Has superado el límite de apuesta para este tipo.",
   },
+  ALREADY_IN_TOURNAMENT: {
+    message:
+      "Ya estás en otro torneo. Termina el actual antes de unirte a otro.",
+  },
+  TOURNAMENT_ALREADY_STARTED: {
+    message: "El torneo ya ha comenzado. No puedes salir.",
+  },
+  PLAYER_NOT_IN_ROOM: { message: "No estás inscrito en este torneo." },
 };
 
 export const getErrorDefinition = (key) => {
