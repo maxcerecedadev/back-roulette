@@ -45,7 +45,7 @@ export const singlePlayerHandler = (io, socket) => {
 
   socket.on("place-bet", (betData) => {
     const { betKey, amount, roomId } = betData;
-    const room = gameManager.getSingleRoom(roomId);
+    const room = gameManager.getRoom(roomId);
     if (!room || room.gameState !== "betting") {
       socket.emit("error", { message: "No se pueden colocar apuestas ahora." });
       return;
@@ -64,35 +64,35 @@ export const singlePlayerHandler = (io, socket) => {
   });
 
   socket.on("clear-bets", ({ roomId }) => {
-    const room = gameManager.getSingleRoom(roomId);
+    const room = gameManager.getRoom(roomId);
     const playerId = getPlayerId();
     if (!room || !playerId) return;
     room.clearBets(playerId);
   });
 
   socket.on("undo-bet", ({ roomId }) => {
-    const room = gameManager.getSingleRoom(roomId);
+    const room = gameManager.getRoom(roomId);
     const playerId = getPlayerId();
     if (!room || !playerId) return;
     room.undoBet(playerId);
   });
 
   socket.on("repeat-bet", ({ roomId }) => {
-    const room = gameManager.getSingleRoom(roomId);
+    const room = gameManager.getRoom(roomId);
     const playerId = getPlayerId();
     if (!room || !playerId) return;
     room.repeatBet(playerId);
   });
 
   socket.on("double-bet", ({ roomId }) => {
-    const room = gameManager.getSingleRoom(roomId);
+    const room = gameManager.getRoom(roomId);
     const playerId = getPlayerId();
     if (!room || !playerId) return;
     room.doubleBet(playerId);
   });
 
   socket.on("spin", ({ roomId }) => {
-    const room = gameManager.getSingleRoom(roomId);
+    const room = gameManager.getRoom(roomId);
     if (!room) return;
 
     if (room.gameState === "betting") {
@@ -106,7 +106,7 @@ export const singlePlayerHandler = (io, socket) => {
 
   socket.on("disconnect", () => {
     const roomId = socket.id;
-    const room = gameManager.getSingleRoom(roomId);
+    const room = gameManager.getRoom(roomId);
 
     if (room) {
       if (socket.player) {
