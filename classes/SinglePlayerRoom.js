@@ -3,6 +3,7 @@ import { RouletteEngine } from "./RouletteEngine.js";
 import { emitErrorByKey } from "../utils/errorHandler.js";
 import { BetLimits } from "./BetLimits.js";
 import prisma from "../prisma/index.js";
+import { CasinoApiService } from "../services/casinoApiService.js";
 
 const GAME_STATES = {
   BETTING: "betting",
@@ -27,6 +28,9 @@ export class SinglePlayerRoom {
   }
 
   broadcast(event, data) {
+    console.log(event);
+    console.log(data);
+
     this.server.to(this.id).emit(event, data);
   }
 
@@ -100,12 +104,23 @@ export class SinglePlayerRoom {
         if (!this.manualMode) this.startCountdown();
         return;
       }
+
       this.gameState = GAME_STATES.SPINNING;
       if (this.manualMode) {
         this.broadcast("game-state-update", { state: this.gameState });
       } else {
         this.spinWheel();
       }
+
+      Array.from(this.players.keys()).forEach((playerId) => {
+        this.attemptPlaceBet(playerId).catch((err) => {
+          console.error(
+            `❌ Error confirmando apuestas para ${playerId}:`,
+            err.message
+          );
+          this.logFailedTransaction(playerId, "BET", 0, err.message);
+        });
+      });
     } else if (this.gameState === GAME_STATES.SPINNING) {
       this.gameState = GAME_STATES.PAYOUT;
       if (!this.winningNumber) {
@@ -176,6 +191,25 @@ export class SinglePlayerRoom {
 
       if (totalWinnings > 0) {
         player.updateBalance(totalWinnings);
+      }
+
+      if (totalWinnings > 0) {
+        this.attemptDepositWinnings(
+          playerId,
+          totalWinnings,
+          player.ip || "unknown"
+        ).catch((err) => {
+          console.error(
+            `❌ Error depositando ganancias para ${playerId}:`,
+            err.message
+          );
+          this.logFailedTransaction(
+            playerId,
+            "WIN",
+            totalWinnings,
+            err.message
+          );
+        });
       }
 
       const balanceAfterPayout = player.balance;
@@ -629,5 +663,69 @@ export class SinglePlayerRoom {
     while (this.rouletteEngine.resultsQueue.length < 20)
       this.rouletteEngine.fillQueue();
     return result;
+  }
+
+  // ✅ ✅ ✅ MÉTODOS AUXILIARES ASINCRONOS ✅ ✅ ✅
+
+  async attemptPlaceBet(playerId) {
+    const player = this.players.get(playerId);
+    if (!player) return;
+
+    const playerBets = this.bets.get(playerId);
+    if (!playerBets || playerBets.size === 0) return;
+
+    const totalBetAmount = Array.from(playerBets.values()).reduce(
+      (sum, amt) => sum + amt,
+      0
+    );
+
+    try {
+      await CasinoApiService.placeBet(
+        playerId,
+        totalBetAmount,
+        "round_total",
+        player.ip || "unknown",
+        player.currency || "ARS"
+      );
+      console.log(`✅ Apuesta confirmada para ${playerId}: ${totalBetAmount}`);
+    } catch (error) {
+      console.error(`❌ Falló placeBet para ${playerId}:`, error.message);
+      throw error;
+    }
+  }
+
+  async attemptDepositWinnings(playerId, amount, ip) {
+    try {
+      await CasinoApiService.depositWinnings(playerId, amount, ip);
+      console.log(`✅ Ganancias depositadas para ${playerId}: ${amount}`);
+    } catch (error) {
+      console.error(
+        `❌ Falló depositWinnings para ${playerId}:`,
+        error.message
+      );
+      throw error;
+    }
+  }
+
+  async logFailedTransaction(playerId, type, amount, error) {
+    try {
+      await prisma.failedTransaction.create({
+        playerId,
+        roomId: this.id,
+        type,
+        amount,
+        error: error.toString().substring(0, 500),
+        status: "PENDING",
+        createdAt: new Date(),
+      });
+      console.warn(
+        `🚨 Transacción fallida registrada para ${playerId} (${type})`
+      );
+    } catch (dbError) {
+      console.error(
+        `❌ Error guardando transacción fallida en DB:`,
+        dbError.message
+      );
+    }
   }
 }

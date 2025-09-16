@@ -37,6 +37,22 @@ CREATE TABLE "public"."roulette_rounds" (
     CONSTRAINT "roulette_rounds_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "public"."ExternalTransaction" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "transactionId" TEXT NOT NULL,
+    "amount" DOUBLE PRECISION NOT NULL,
+    "type" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "provider" TEXT NOT NULL,
+    "errorMessage" TEXT,
+    "rawResponse" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ExternalTransaction_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "users_externalToken_key" ON "public"."users"("externalToken");
 
@@ -57,6 +73,15 @@ CREATE INDEX "roulette_rounds_sessionId_idx" ON "public"."roulette_rounds"("sess
 
 -- CreateIndex
 CREATE INDEX "roulette_rounds_createdAt_idx" ON "public"."roulette_rounds"("createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ExternalTransaction_transactionId_key" ON "public"."ExternalTransaction"("transactionId");
+
+-- CreateIndex
+CREATE INDEX "ExternalTransaction_userId_idx" ON "public"."ExternalTransaction"("userId");
+
+-- CreateIndex
+CREATE INDEX "ExternalTransaction_status_idx" ON "public"."ExternalTransaction"("status");
 
 -- AddForeignKey
 ALTER TABLE "public"."roulette_rounds" ADD CONSTRAINT "roulette_rounds_playerId_fkey" FOREIGN KEY ("playerId") REFERENCES "public"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;

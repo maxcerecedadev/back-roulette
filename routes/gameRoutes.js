@@ -9,6 +9,8 @@ import axios from "axios";
 
 const router = Router();
 
+const API_BASE_URL = process.env.CASINO_API_BASE_URL;
+
 // Rutas para admin
 
 router.get("/status", adminAuth, (req, res) => {
@@ -137,7 +139,7 @@ router.post("/auth/validate-token", async (req, res) => {
 
   try {
     const response = await axios.post(
-      process.env.PROVIDER_API_URL,
+      `${API_BASE_URL}/usuario/ruleta-user-info`,
       {},
       {
         headers: {

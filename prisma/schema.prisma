@@ -52,3 +52,30 @@ model RouletteRound {
   @@index([createdAt])
   @@map("roulette_rounds")
 }
+
+model ExternalTransaction {
+  id            String   @id @default(uuid())
+  userId        String
+  transactionId String   @unique
+  amount        Float
+  type          String   
+  status        String   
+  provider      String
+  errorMessage  String?
+  rawResponse   String?
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([status])
+}
+
+model FailedTransaction {
+  id          String   @id @default(uuid())
+  playerId    String
+  roomId      String
+  type        String   
+  amount      Float
+  error       String
+  status      String   @default("PENDING") 
+  createdAt   DateTime @default(now())
+}
