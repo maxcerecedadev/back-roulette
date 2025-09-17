@@ -1,6 +1,7 @@
 // src/services/gameManager.js
 
 import { SinglePlayerRoom } from "../classes/SinglePlayerRoom.js";
+import { TournamentRoom } from "../classes/TournamentRoom.js";
 
 const rooms = new Map();
 
@@ -12,8 +13,16 @@ const rooms = new Map();
  */
 export const getOrCreateSingleRoom = (roomId, io) => {
   if (!rooms.has(roomId)) {
-    console.log(`Creando nueva sala para un jugador: ${roomId}`);
     const newRoom = new SinglePlayerRoom(io, roomId);
+    rooms.set(roomId, newRoom);
+    return newRoom;
+  }
+  return rooms.get(roomId);
+};
+
+export const getOrCreateTournamentRoom = (roomId, io, creatorId) => {
+  if (!rooms.has(roomId)) {
+    const newRoom = new TournamentRoom(io, roomId, creatorId);
     rooms.set(roomId, newRoom);
     return newRoom;
   }
@@ -25,27 +34,23 @@ export const getOrCreateSingleRoom = (roomId, io) => {
  * @param {string} roomId - El ID de la sala.
  * @returns {SinglePlayerRoom | undefined} La instancia de la sala o undefined si no se encuentra.
  */
-export const getRoom = (roomId) => {
-  return rooms.get(roomId);
-};
-
+export const getRoom = (roomId) => rooms.get(roomId);
 /**
  * Elimina una sala por su ID.
  * @param {string} roomId - El ID de la sala.
  * @returns {boolean} True si la sala fue eliminada, false de lo contrario.
  */
+
 export const removeRoom = (roomId) => {
   if (rooms.has(roomId)) {
     const room = rooms.get(roomId);
-
     room.players.forEach((player) => {
       const socket = player.socket;
       if (socket && socket.connected) {
         try {
           socket.emit("room-deleted", {
             reason: "disconnected",
-            message:
-              "La sala ha sido eliminada porque el jugador se desconectó.",
+            message: "La sala ha sido eliminada.",
           });
           socket.disconnect(true);
         } catch (err) {
@@ -57,11 +62,9 @@ export const removeRoom = (roomId) => {
       }
     });
 
-    room.stopCountdown?.();
-
+    if (room.stopCountdown) room.stopCountdown();
     rooms.delete(roomId);
     console.log(`🗑️ Sala ${roomId} eliminada del manager.`);
-
     return true;
   }
   return false;
@@ -112,3 +115,5 @@ export function peekResults(roomId) {
   if (!room) return null;
   return room.peekQueue(20);
 }
+
+export { rooms as tournamentRooms };

@@ -3,9 +3,10 @@ import cors from "cors";
 import { createServer } from "node:http";
 import { Server as SocketServer } from "socket.io";
 import gameRoutes from "./routes/gameRoutes.js";
-import { singlePlayerHandler } from "./handlers/singlePlayerHandler.js";
 import prisma from "./prisma/index.js";
 import { config } from "dotenv";
+import { singlePlayerHandler } from "./handlers/singlePlayerHandler.js";
+import { tournamentHandler } from "./handlers/tournamentHandler.js";
 
 config();
 
@@ -29,7 +30,27 @@ app.use("/api/v1", gameRoutes);
 io.on("connection", (socket) => {
   console.log("🔌 Nuevo cliente conectado:", socket.id);
 
-  singlePlayerHandler(io, socket);
+  socket.on("join-mode", (mode, callback) => {
+    console.log(`🎯 [server] join-mode recibido: ${mode}`);
+
+    if (mode === "single") {
+      singlePlayerHandler(io, socket);
+      if (callback && typeof callback === "function") {
+        callback({ success: true });
+      }
+    } else if (mode === "tournament") {
+      tournamentHandler(io, socket);
+      if (callback && typeof callback === "function") {
+        callback({ success: true });
+      }
+    } else {
+      if (callback && typeof callback === "function") {
+        callback({ error: "Modo no soportado" });
+      }
+      socket.emit("error", { message: "Modo no soportado" });
+      socket.disconnect(true);
+    }
+  });
 
   socket.on("disconnect", () => {
     console.log("🔌 Cliente desconectado:", socket.id);

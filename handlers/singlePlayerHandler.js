@@ -8,6 +8,8 @@ import * as gameManager from "../services/gameManager.js";
  * @param {object} io - La instancia completa del servidor de Socket.IO, para emitir eventos a todos los clientes.
  */
 export const singlePlayerHandler = (io, socket) => {
+  console.log(`✅ [singlePlayerHandler] Adjuntado al socket: ${socket.id}`);
+
   const getPlayerId = () => {
     if (socket.player && socket.player.id) {
       return socket.player.id;
@@ -16,6 +18,7 @@ export const singlePlayerHandler = (io, socket) => {
   };
 
   socket.on("single-join", (data, callback) => {
+    console.log(`🎯 [singlePlayerHandler] single-join recibido:`, data);
     const { userId, userName, balance } = data;
     const player = new Player(userId, userName, balance);
 

@@ -234,4 +234,28 @@ router.post("/auth/validate-token", async (req, res) => {
   }
 });
 
+router.post("/tournament/create", async (req, res) => {
+  const { maxPlayers = 3, maxRounds = 10 } = req.body;
+
+  try {
+    const tournamentId = `TOURNEY_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`.toUpperCase();
+
+    // Opcional: Guardar en DB
+    // await prisma.tournament.create({ ... });
+
+    res.json({
+      success: true,
+      tournamentId,
+      maxPlayers,
+      maxRounds,
+      message: "Torneo creado exitosamente",
+    });
+  } catch (error) {
+    console.error("❌ Error creando torneo:", error);
+    res.status(500).json({ error: "Error interno al crear torneo" });
+  }
+});
+
 export default router;
