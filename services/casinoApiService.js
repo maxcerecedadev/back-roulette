@@ -2,6 +2,7 @@
 import axios from "axios";
 import prisma from "../prisma/index.js";
 import { v4 as uuidv4 } from "uuid";
+import { formatDateForExternalAPI } from "../utils/timezone.js";
 
 const API_BASE_URL = process.env.CASINO_API_BASE_URL;
 
@@ -18,19 +19,8 @@ export class CasinoApiService {
 
     const transactionId = `RLT_${uuidv4()}`;
 
-    const now = new Date();
-    const fecha =
-      now.getFullYear() +
-      "-" +
-      String(now.getMonth() + 1).padStart(2, "0") +
-      "-" +
-      String(now.getDate()).padStart(2, "0") +
-      " " +
-      String(now.getHours()).padStart(2, "0") +
-      ":" +
-      String(now.getMinutes()).padStart(2, "0") +
-      ":" +
-      String(now.getSeconds()).padStart(2, "0");
+    // ✅ Genera la fecha en la zona horaria definida en .env
+    const fecha = formatDateForExternalAPI(new Date(), "yyyy-MM-dd HH:mm:ss");
 
     try {
       const response = await axios.post(
@@ -121,19 +111,8 @@ export class CasinoApiService {
 
     const transactionId = `WIN_${uuidv4()}`;
 
-    const now = new Date();
-    const fecha =
-      now.getFullYear() +
-      "-" +
-      String(now.getMonth() + 1).padStart(2, "0") +
-      "-" +
-      String(now.getDate()).padStart(2, "0") +
-      " " +
-      String(now.getHours()).padStart(2, "0") +
-      ":" +
-      String(now.getMinutes()).padStart(2, "0") +
-      ":" +
-      String(now.getSeconds()).padStart(2, "0");
+    // ✅ Genera la fecha en la zona horaria definida en .env
+    const fecha = formatDateForExternalAPI(new Date(), "yyyy-MM-dd HH:mm:ss");
 
     try {
       const response = await axios.post(
