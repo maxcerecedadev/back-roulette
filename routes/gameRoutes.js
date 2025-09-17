@@ -17,6 +17,11 @@ router.get("/status", adminAuth, (req, res) => {
   const { roomId } = req.query;
   const status = gameManager.getStatus(roomId);
 
+  console.log(
+    `[ADMIN] 📋 Estado de sala ${roomId}:`,
+    JSON.stringify(status, null, 2)
+  );
+
   if (!status) {
     return res.status(404).json({ error: "Sala no encontrada." });
   }

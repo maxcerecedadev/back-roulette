@@ -46,6 +46,10 @@ export class TournamentRoom {
       throw new Error("La sala de torneo está llena (máx. 3 jugadores).");
     }
 
+    console.log(
+      `🎮 [TournamentRoom.addPlayer] Jugador ${player.id} (${player.name}) ENTRANDO a sala de torneo ${this.id}`
+    );
+
     player.socket = socket;
     player.socketId = socket.id;
     player.ip = socket.handshake.address || "unknown";
@@ -103,12 +107,15 @@ export class TournamentRoom {
 
   removePlayer(playerId) {
     if (this.players.has(playerId)) {
+      const playerName = this.players.get(playerId)?.name || "Desconocido";
+      console.log(
+        `🚪 [TournamentRoom.removePlayer] Jugador ${playerId} (${playerName}) ELIMINADO de sala de torneo ${this.id}`
+      );
+
       this.players.delete(playerId);
       this.bets.delete(playerId);
       this.lastBets.delete(playerId);
     }
-    // Si quedan menos de 3, y el torneo no ha empezado, permitir reemplazo
-    // Si ya empezó, marcar como abandonado y continuar sin él
     this.broadcast("tournament-state-update", this.getTournamentState());
   }
 

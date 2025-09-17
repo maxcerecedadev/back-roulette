@@ -15,8 +15,10 @@ export const getOrCreateSingleRoom = (roomId, io) => {
   if (!rooms.has(roomId)) {
     const newRoom = new SinglePlayerRoom(io, roomId);
     rooms.set(roomId, newRoom);
+    console.log(`🆕 [GameManager] Sala SINGLE creada: ${roomId}`);
     return newRoom;
   }
+  console.log(`🔁 [GameManager] Sala SINGLE existente obtenida: ${roomId}`);
   return rooms.get(roomId);
 };
 
@@ -24,8 +26,12 @@ export const getOrCreateTournamentRoom = (roomId, io, creatorId) => {
   if (!rooms.has(roomId)) {
     const newRoom = new TournamentRoom(io, roomId, creatorId);
     rooms.set(roomId, newRoom);
+    console.log(
+      `🏆 [GameManager] Sala TORNEO creada: ${roomId} (creador: ${creatorId})`
+    );
     return newRoom;
   }
+  console.log(`🔁 [GameManager] Sala TORNEO existente obtenida: ${roomId}`);
   return rooms.get(roomId);
 };
 
@@ -93,18 +99,35 @@ export const getRooms = () => {
 export const getStatus = (roomId) => {
   if (roomId) {
     const room = getRoom(roomId);
-    if (!room) return null;
+    if (!room) {
+      console.warn(`[getStatus] ❌ No se encontró sala con ID: ${roomId}`);
+      return null;
+    }
+
+    // 👇 LOG: Qué tipo de sala es
+    const roomType =
+      room instanceof TournamentRoom
+        ? "tournament"
+        : room instanceof SinglePlayerRoom
+        ? "single"
+        : "unknown";
+    console.log(
+      `[getStatus] 🧭 Obteniendo estado de sala ${roomId} (tipo: ${roomType})`
+    );
+
     return {
       roomId: room.id,
       gameState: room.gameState,
-      players: Array.from(room.players.values()).map((player) =>
-        player.toSocketData()
-      ),
+      players: Array.from(room.players.values()).map((player) => {
+        console.log(
+          `[getStatus] 👤 Jugador en sala: ${player.id} - ${player.name}`
+        );
+        return player.toSocketData();
+      }),
     };
   }
   return getRooms();
 };
-
 /**
  * Devuelve los próximos 20 resultados de la sala (sin sacarlos de la cola).
  * @param {SinglePlayerRoom} room - La sala de juego.

@@ -12,6 +12,8 @@ export const tournamentHandler = (io, socket) => {
   socket.on("tournament-join", (data, callback) => {
     const { userId, userName, balance, tournamentId } = data;
 
+    const playerId = userId;
+
     if (
       !tournamentId ||
       typeof tournamentId !== "string" ||
@@ -31,6 +33,23 @@ export const tournamentHandler = (io, socket) => {
     const player = new Player(userId, userName, balance, isCreator);
     socket.player = player;
 
+    console.log(
+      `🔎 [tournamentHandler] ANTES de unirse: buscando si jugador ${playerId} ya está en alguna sala...`
+    );
+
+    for (const [
+      existingRoomId,
+      existingRoom,
+    ] of gameManager.tournamentRooms.entries()) {
+      if (existingRoom.players.has(playerId)) {
+        console.warn(
+          `⚠️ [tournamentHandler] ¡Jugador ${playerId} YA ESTÁ en sala ${existingRoomId}!`
+        );
+        // Opcional: podrías eliminarlo aquí si quieres forzar un solo juego a la vez
+        // existingRoom.removePlayer(playerId);
+      }
+    }
+
     try {
       const room = gameManager.getOrCreateTournamentRoom(
         roomId,
@@ -44,11 +63,13 @@ export const tournamentHandler = (io, socket) => {
         } la sala ${roomId}`
       );
 
-      room.addPlayer(player, socket);
+      // 👇 ¡PRIMERO unir el socket a la sala!
       socket.join(roomId);
       socket.roomId = roomId;
 
-      // 👇 Log después de unirse: cuántos jugadores hay ahora
+      // 👇 LUEGO agregar el jugador (emite broadcast a la sala)
+      room.addPlayer(player, socket);
+
       console.log(
         `👥 [Torneo] Sala ${roomId} ahora tiene ${room.players.size}/3 jugadores`
       );
@@ -70,7 +91,6 @@ export const tournamentHandler = (io, socket) => {
       }
     }
   });
-
   socket.on("tournament-start", ({ creatorId }) => {
     const roomId = socket.roomId;
     if (!roomId) {
