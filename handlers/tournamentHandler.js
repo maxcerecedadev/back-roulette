@@ -140,8 +140,9 @@ export const tournamentHandler = (io, socket) => {
       if (!room || !playerId) return;
 
       if (typeof room[event] === "function") {
-        // 👇 Log opcional: si quieres ver cada apuesta en consola (puede ser mucho)
-        // console.log(`🎰 [Torneo] Jugador ${playerId} ejecutó ${event} en sala ${roomId}`);
+        console.log(
+          `🎰 [Torneo] Jugador ${playerId} ejecutó ${event} en sala ${roomId}`
+        );
         room[event](playerId, data);
       }
     });
@@ -154,6 +155,53 @@ export const tournamentHandler = (io, socket) => {
       console.log(`⏳ [Torneo] Sala ${roomId}: Forzando giro manual (spin)`);
       room.nextState();
     }
+  });
+
+  socket.on("leave-room", ({ roomId, userId }) => {
+    console.log(
+      `🚪 [tournamentHandler] Jugador ${userId} solicitó salir de sala ${roomId}`
+    );
+
+    if (!roomId || !userId) {
+      console.warn("⚠️ [tournamentHandler] leave-room: faltan roomId o userId");
+      socket.emit("error", { message: "Faltan parámetros." });
+      return;
+    }
+
+    const room = gameManager.getRoom(roomId);
+    if (!room) {
+      console.warn(
+        `⚠️ [tournamentHandler] Sala ${roomId} no encontrada al salir`
+      );
+      socket.emit("error", { message: "Sala no encontrada." });
+      return;
+    }
+
+    if (room.isStarted) {
+      console.warn(
+        `⚠️ [tournamentHandler] Jugador ${userId} intentó salir de torneo INICIADO`
+      );
+      socket.emit("error", {
+        message: "No puedes salir: el torneo ya ha comenzado.",
+      });
+      return;
+    }
+
+    if (room.players.has(userId)) {
+      room.removePlayer(userId);
+      console.log(
+        `✅ [tournamentHandler] Jugador ${userId} eliminado de sala ${roomId}`
+      );
+    }
+
+    if (room.players.size === 0) {
+      gameManager.removeRoom(roomId);
+      console.log(
+        `🗑️ [tournamentHandler] Sala ${roomId} eliminada por estar vacía`
+      );
+    }
+
+    room.broadcast("tournament-state-update", room.getTournamentState());
   });
 
   socket.on("disconnect", () => {

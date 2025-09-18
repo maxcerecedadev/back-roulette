@@ -3,7 +3,6 @@ import { RouletteEngine } from "./RouletteEngine.js";
 import { emitErrorByKey } from "../utils/errorHandler.js";
 import { BetLimits } from "./BetLimits.js";
 import prisma from "../prisma/index.js";
-import { CasinoApiService } from "../services/casinoApiService.js";
 
 const GAME_STATES = {
   BETTING: "betting",
@@ -23,13 +22,19 @@ export class TournamentRoom {
     this.gameState = GAME_STATES.BETTING;
     this.currentRound = 1;
     this.maxRounds = 10;
-    this.timeRemaining = 20;
+    this.timeRemaining = 40;
     this.manualMode = false;
     this.rouletteEngine = new RouletteEngine(20);
     this.winningNumber = null;
     this.roundResults = [];
     this.countdownInterval = null;
     this.isStarted = false;
+
+    //  Configuración del torneo
+    this.entryFee = 10000;
+    this.houseCutPercentage = 0.2; // 20% para la casa
+    this.totalPot = 0; // Acumulado de inscripciones
+    this.playablePot = 0; // 80% del totalPot → premio a repartir
   }
 
   broadcast(event, data) {
@@ -46,8 +51,19 @@ export class TournamentRoom {
       throw new Error("La sala de torneo está llena (máx. 3 jugadores).");
     }
 
+    if (player.balance < this.entryFee) {
+      throw new Error(
+        "Saldo insuficiente para inscribirse en el torneo (se requieren 10.000 fichas)."
+      );
+    }
+
+    player.balance -= this.entryFee;
+    player.initialTournamentBalance = player.balance;
+
+    this.totalPot += this.entryFee;
+
     console.log(
-      `🎮 [TournamentRoom.addPlayer] Jugador ${player.id} (${player.name}) ENTRANDO a sala de torneo ${this.id}`
+      `🎟️ [TournamentRoom.addPlayer] Jugador ${player.id} (${player.name}) pagó ${this.entryFee} fichas. Balance restante: ${player.balance}. Poso total: ${this.totalPot}`
     );
 
     player.socket = socket;
@@ -59,6 +75,8 @@ export class TournamentRoom {
       ...player.toSocketData(),
       isCreator: player.id === this.creatorId,
     });
+
+    socket.emit("tournament-balance-update", { newBalance: player.balance });
 
     this.broadcast("tournament-state-update", this.getTournamentState());
   }
@@ -76,9 +94,21 @@ export class TournamentRoom {
       throw new Error("El torneo ya ha comenzado.");
     }
 
+    this.playablePot = Math.floor(
+      this.totalPot * (1 - this.houseCutPercentage)
+    );
+    console.log(
+      `💰 [TournamentRoom] Torneo iniciado. Poso total: ${
+        this.totalPot
+      }. Casa: ${this.totalPot - this.playablePot}. Premio: ${this.playablePot}`
+    );
+
     this.isStarted = true;
     this.startCountdown();
-    this.broadcast("tournament-started", { round: this.currentRound });
+    this.broadcast("tournament-started", {
+      round: this.currentRound,
+      playablePot: this.playablePot,
+    });
     this.broadcast("tournament-state-update", this.getTournamentState());
   }
 
@@ -91,7 +121,7 @@ export class TournamentRoom {
       timeRemaining: this.timeRemaining,
       players: Array.from(this.players.values()).map((p) => ({
         ...p.toSocketData(),
-        isCreator: p.id === this.creatorId, // 👈 Añadimos esta info
+        isCreator: p.id === this.creatorId,
       })),
       winningNumber: this.winningNumber
         ? {
@@ -100,8 +130,10 @@ export class TournamentRoom {
           }
         : null,
       roundResults: this.roundResults.slice(-3),
-      isStarted: this.isStarted, // 👈 Nuevo campo
-      creatorId: this.creatorId, // Opcional, para UI
+      isStarted: this.isStarted,
+      creatorId: this.creatorId,
+      totalPot: this.totalPot,
+      playablePot: this.playablePot,
     };
   }
 
@@ -164,11 +196,9 @@ export class TournamentRoom {
       });
 
       if (!hasBets) {
-        // Si nadie apostó, saltar al giro sin demora
         this.spinWheel();
       } else {
-        // Esperar 2 segundos antes de girar (mejor UX)
-        setTimeout(() => this.spinWheel(), 2000);
+        setTimeout(() => this.spinWheel(), 6000);
       }
     } else if (this.gameState === GAME_STATES.SPINNING) {
       this.gameState = GAME_STATES.PAYOUT;
@@ -185,8 +215,6 @@ export class TournamentRoom {
           let totalWinnings = 0;
 
           playerBets.forEach((amount) => (totalBet += amount));
-
-          // Calcular ganancias reales
           playerBets.forEach((amount, betKey) => {
             const profitMultiplier = this.rouletteEngine.calculatePayout(
               this.winningNumber,
@@ -210,21 +238,37 @@ export class TournamentRoom {
 
       this.roundResults.push(roundData);
 
-      // Avanzar ronda o finalizar torneo
       if (this.currentRound < this.maxRounds) {
         this.currentRound++;
         this.resetRound();
       } else {
         this.gameState = GAME_STATES.FINISHED;
+
+        const finalStandings = this.calculateFinalStandings();
+        const prizeDistribution = this.distributePrize(finalStandings);
+
         this.broadcast("tournament-finished", {
-          winner: this.getWinner(),
-          results: this.roundResults,
+          standings: finalStandings,
+          prizeDistribution,
+          playablePot: this.playablePot,
+          houseCut: this.totalPot - this.playablePot,
         });
 
-        // Guardar torneo en DB
+        prizeDistribution.forEach(({ playerId, prize }) => {
+          const player = this.players.get(playerId);
+          if (player?.socket) {
+            player.socket.emit("tournament-prize-awarded", {
+              prize,
+              message:
+                prize > 0
+                  ? `🎉 ¡Ganaste ${prize.toLocaleString()} fichas!`
+                  : "No ganaste premio esta vez.",
+            });
+          }
+        });
+
         this.saveTournamentToDB().catch(console.error);
 
-        // Desconectar a todos en 10 segundos
         setTimeout(() => {
           this.players.forEach((player) => {
             if (player.socket?.connected) {
@@ -253,7 +297,7 @@ export class TournamentRoom {
   spinWheel() {
     this.winningNumber = this.rouletteEngine.getNextWinningNumber();
     this.broadcast("tournament-state-update", this.getTournamentState());
-    setTimeout(() => this.nextState(), 3000);
+    setTimeout(() => this.nextState(), 6000);
   }
 
   processPayout(winningNumber) {
@@ -300,25 +344,6 @@ export class TournamentRoom {
         player.updateBalance(totalWinnings);
       }
 
-      if (totalWinnings > 0) {
-        this.attemptDepositWinnings(
-          playerId,
-          totalWinnings,
-          player.ip || "unknown"
-        ).catch((err) => {
-          console.error(
-            `❌ Error depositando ganancias para ${playerId}:`,
-            err.message
-          );
-          this.logFailedTransaction(
-            playerId,
-            "WIN",
-            totalWinnings,
-            err.message
-          );
-        });
-      }
-
       const balanceAfterPayout = player.balance;
       const totalNetResult = totalWinnings - totalBetAmount;
       let resultStatus =
@@ -347,7 +372,6 @@ export class TournamentRoom {
       );
       this.lastBets.set(playerId, lastPlayerBets);
 
-      // Guardar ronda individual en DB (opcional, igual que single)
       this.saveRoundToDB(
         player,
         playerId,
@@ -358,7 +382,34 @@ export class TournamentRoom {
       ).catch(console.error);
     });
 
-    setTimeout(() => this.nextState(), 3000); // 3s para ver resultados antes de siguiente ronda
+    setTimeout(() => this.nextState(), 5000);
+  }
+
+  calculateFinalStandings() {
+    return Array.from(this.players.values())
+      .map((player) => ({
+        id: player.id,
+        name: player.name,
+        finalBalance: player.balance,
+      }))
+      .sort((a, b) => b.finalBalance - a.finalBalance); // Mayor balance primero
+  }
+
+  distributePrize(standings) {
+    if (standings.length === 0 || this.playablePot <= 0) return [];
+
+    const topBalance = standings[0].finalBalance;
+    const tiedPlayers = standings.filter(
+      (player) => player.finalBalance === topBalance
+    );
+
+    const prizePerPlayer = Math.floor(this.playablePot / tiedPlayers.length);
+
+    return tiedPlayers.map((player) => ({
+      playerId: player.id,
+      playerName: player.name,
+      prize: prizePerPlayer,
+    }));
   }
 
   getWinner() {
@@ -715,32 +766,15 @@ export class TournamentRoom {
       0
     );
 
-    try {
-      await CasinoApiService.placeBet(
-        playerId,
-        totalBetAmount,
-        "round_total",
-        player.ip || "unknown",
-        player.currency || "ARS"
-      );
-      console.log(`✅ Apuesta confirmada para ${playerId}: ${totalBetAmount}`);
-    } catch (error) {
-      console.error(`❌ Falló placeBet para ${playerId}:`, error.message);
-      throw error;
-    }
+    console.log(
+      `✅ [TORNEO VIRTUAL] Apuesta simulada para ${playerId}: ${totalBetAmount} fichas`
+    );
   }
 
-  async attemptDepositWinnings(playerId, amount, ip) {
-    try {
-      await CasinoApiService.depositWinnings(playerId, amount, ip);
-      console.log(`✅ Ganancias depositadas para ${playerId}: ${amount}`);
-    } catch (error) {
-      console.error(
-        `❌ Falló depositWinnings para ${playerId}:`,
-        error.message
-      );
-      throw error;
-    }
+  async attemptDepositWinnings(playerId, amount) {
+    console.log(
+      `✅ [TORNEO VIRTUAL] Ganancias simuladas para ${playerId}: ${amount} fichas`
+    );
   }
 
   async logFailedTransaction(playerId, type, amount, error) {
