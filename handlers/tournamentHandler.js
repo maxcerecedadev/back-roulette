@@ -134,6 +134,7 @@ export const tournamentHandler = (io, socket) => {
   ];
   betEvents.forEach((event) => {
     socket.on(`tournament-${event}`, (data) => {
+      console.log(`📥 [BACKEND] Recibido evento: tournament-${event}`, data);
       const { roomId } = data;
       const room = gameManager.getRoom(roomId);
       const playerId = getPlayerId();
