@@ -184,10 +184,6 @@ export class TournamentRoom {
     this.stopCountdown();
 
     if (this.gameState === GAME_STATES.BETTING) {
-      const hasBets = Array.from(this.bets.values()).some(
-        (bets) => bets.size > 0
-      );
-
       this.gameState = GAME_STATES.SPINNING;
       this.broadcast("tournament-state-update", this.getTournamentState());
 
@@ -201,11 +197,7 @@ export class TournamentRoom {
         });
       });
 
-      if (!hasBets) {
-        this.spinWheel();
-      } else {
-        setTimeout(() => this.spinWheel(), 6000);
-      }
+      setTimeout(() => this.spinWheel(), 6000);
     } else if (this.gameState === GAME_STATES.SPINNING) {
       this.gameState = GAME_STATES.PAYOUT;
       this.processPayout(this.winningNumber);
@@ -243,7 +235,6 @@ export class TournamentRoom {
 
       this.roundResults.push(roundData);
 
-      // ✅ CORREGIDO: Solo finalizar si es la última ronda
       if (this.currentRound >= this.maxRounds) {
         this.gameState = GAME_STATES.FINISHED;
 
@@ -626,8 +617,7 @@ export class TournamentRoom {
     // 6. Registrar apuesta
     const currentAmount = playerBets.get(betKey) || 0;
     playerBets.set(betKey, currentAmount + amount);
-    player.tournamentBalance -= amount; // ✅ ¡CORREGIDO! Usar tournamentBalance
-
+    player.tournamentBalance -= amount;
     // 7. Actualizar lastBets
     if (!this.lastBets.has(playerId)) this.lastBets.set(playerId, new Map());
     const lastPlayerBets = this.lastBets.get(playerId);
@@ -721,11 +711,10 @@ export class TournamentRoom {
     if (!player)
       return callback?.({ success: false, message: "Jugador no encontrado." });
 
-    player.tournamentBalance += amount; // ✅ Usar tournamentBalance
-
+    player.tournamentBalance += amount;
     if (player.socket) {
       player.socket.emit("tournament-bet-undone", {
-        newBalance: player.tournamentBalance, // ✅ Usar tournamentBalance
+        newBalance: player.tournamentBalance,
         removedBet: { betKey, amount },
       });
     }
@@ -760,7 +749,7 @@ export class TournamentRoom {
     lastBets.forEach((amount, betKey) => repeatedBets.set(betKey, amount));
 
     this.bets.set(playerId, repeatedBets);
-    player.tournamentBalance -= totalAmount; // ✅ Usar tournamentBalance
+    player.tournamentBalance -= totalAmount;
 
     const betsArray = Array.from(repeatedBets, ([key, val]) => ({
       betKey: key,
@@ -769,13 +758,13 @@ export class TournamentRoom {
 
     if (player.socket) {
       player.socket.emit("tournament-repeat-bet", {
-        newBalance: player.tournamentBalance, // ✅ Usar tournamentBalance
+        newBalance: player.tournamentBalance,
         bets: betsArray,
         totalBet: totalAmount,
       });
     }
 
-    callback?.({ success: true, newBalance: player.tournamentBalance }); // ✅ Usar tournamentBalance
+    callback?.({ success: true, newBalance: player.tournamentBalance });
   }
 
   "double-bet"(playerId, data, callback) {
@@ -824,18 +813,14 @@ export class TournamentRoom {
       return callback?.({ success: false, message: limitErrors[0].reason });
     }
 
-    // ✅ Pasar el callback original a place-bet
     for (const [betKey, amount] of playerBets.entries()) {
       this["place-bet"](
         playerId,
         { betKey, amount, round: this.currentRound },
-        callback, // ← PASAR EL CALLBACK ORIGINAL
+        callback,
         true
       );
     }
-
-    // ✅ NO llamar a callback aquí, porque place-bet ya lo hará
-    // callback?.({ success: true, newBalance: player.tournamentBalance });
   }
 
   // ✅ ✅ ✅ MÉTODOS AUXILIARES ASINCRONOS ✅ ✅ ✅
