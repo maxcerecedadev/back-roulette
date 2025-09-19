@@ -79,3 +79,24 @@ model FailedTransaction {
   status      String   @default("PENDING") 
   createdAt   DateTime @default(now())
 }
+
+model Tournament {
+  id            String   @id @default(uuid())
+  rounds        Int      
+  currentRound  Int
+  status        String   
+  results       Json?    
+  createdAt     DateTime @default(now())
+  tournamentRounds Round[] @relation(name: "TournamentRounds") 
+}
+
+model Round {
+  id             String   @id @default(uuid())
+  tournamentId   String
+  tournament     Tournament @relation(name: "TournamentRounds", fields: [tournamentId], references: [id])
+  roundNumber    Int
+  winningNumber  Int?
+  winningColor   String?
+  playerResults  Json?  
+  createdAt      DateTime @default(now())
+}

@@ -22,7 +22,7 @@ export class TournamentRoom {
     this.gameState = GAME_STATES.BETTING;
     this.currentRound = 1;
     this.maxRounds = 10;
-    this.timeRemaining = 40; //!! 60s Luego
+    this.timeRemaining = 20; //!! 60s Luego
     this.manualMode = false;
     this.rouletteEngine = new RouletteEngine(20);
     this.winningNumber = null;
@@ -59,12 +59,14 @@ export class TournamentRoom {
     }
 
     player.balance -= this.entryFee;
-    player.initialTournamentBalance = player.balance;
+
+    player.tournamentBalance = this.entryFee;
+    player.initialTournamentBalance = this.entryFee;
 
     this.totalPot += this.entryFee;
 
     console.log(
-      `🎟️ [TournamentRoom.addPlayer] Jugador ${player.id} (${player.name}) pagó ${this.entryFee} fichas. Balance restante: ${player.balance}. Poso total: ${this.totalPot}`
+      `🎟️ [TournamentRoom.addPlayer] Jugador ${player.id} (${player.name}) pagó ${this.entryFee} fichas. Balance real restante: ${player.balance}. Balance de torneo: ${player.tournamentBalance}. Poso total: ${this.totalPot}`
     );
 
     player.socket = socket;
@@ -77,7 +79,9 @@ export class TournamentRoom {
       isCreator: player.id === this.creatorId,
     });
 
-    socket.emit("tournament-balance-update", { newBalance: player.balance });
+    socket.emit("tournament-balance-update", {
+      newBalance: player.tournamentBalance,
+    });
 
     this.broadcast("tournament-state-update", this.getTournamentState());
   }
@@ -123,6 +127,7 @@ export class TournamentRoom {
       players: Array.from(this.players.values()).map((p) => ({
         ...p.toSocketData(),
         isCreator: p.id === this.creatorId,
+        tournamentBalance: p.tournamentBalance,
       })),
       winningNumber: this.winningNumber
         ? {
@@ -205,7 +210,6 @@ export class TournamentRoom {
       this.gameState = GAME_STATES.PAYOUT;
       this.processPayout(this.winningNumber);
     } else if (this.gameState === GAME_STATES.PAYOUT) {
-      // Guardar resultados de la ronda
       const roundData = {
         round: this.currentRound,
         winningNumber: this.winningNumber?.number,
@@ -239,33 +243,38 @@ export class TournamentRoom {
 
       this.roundResults.push(roundData);
 
-      if (this.currentRound < this.maxRounds) {
-        this.currentRound++;
-        this.resetRound();
-      } else {
+      // ✅ CORREGIDO: Solo finalizar si es la última ronda
+      if (this.currentRound >= this.maxRounds) {
         this.gameState = GAME_STATES.FINISHED;
 
         const finalStandings = this.calculateFinalStandings();
         const prizeDistribution = this.distributePrize(finalStandings);
+
+        prizeDistribution.forEach(({ playerId, prize }) => {
+          const player = this.players.get(playerId);
+          if (player) {
+            player.balance += prize;
+            console.log(
+              `🏆 [PREMIO] Jugador ${player.name} (${playerId}) ganó ${prize} fichas. Nuevo saldo real: ${player.balance}`
+            );
+
+            if (player.socket) {
+              player.socket.emit("tournament-prize-awarded", {
+                prize,
+                message:
+                  prize > 0
+                    ? `🎉 ¡Ganaste ${prize.toLocaleString()} fichas!`
+                    : "No ganaste premio esta vez.",
+              });
+            }
+          }
+        });
 
         this.broadcast("tournament-finished", {
           standings: finalStandings,
           prizeDistribution,
           playablePot: this.playablePot,
           houseCut: this.totalPot - this.playablePot,
-        });
-
-        prizeDistribution.forEach(({ playerId, prize }) => {
-          const player = this.players.get(playerId);
-          if (player?.socket) {
-            player.socket.emit("tournament-prize-awarded", {
-              prize,
-              message:
-                prize > 0
-                  ? `🎉 ¡Ganaste ${prize.toLocaleString()} fichas!`
-                  : "No ganaste premio esta vez.",
-            });
-          }
         });
 
         this.saveTournamentToDB().catch(console.error);
@@ -280,9 +289,21 @@ export class TournamentRoom {
               player.socket.disconnect(true);
             }
           });
-        }, 10000);
+        }, 5000);
+      } else {
+        this.currentRound++;
+        this.resetRound();
       }
     }
+  }
+
+  spinWheel() {
+    this.winningNumber = this.rouletteEngine.getNextWinningNumber();
+    console.log(
+      `🎯 [spinWheel] ¡Número ganador de la ronda ${this.currentRound}!: ${this.winningNumber.number} (${this.winningNumber.color})`
+    );
+    this.broadcast("tournament-state-update", this.getTournamentState());
+    setTimeout(() => this.nextState(), 6000);
   }
 
   resetRound() {
@@ -296,22 +317,13 @@ export class TournamentRoom {
     this.bets.clear();
     this.lastBets.clear();
     this.gameState = GAME_STATES.BETTING;
-    this.timeRemaining = 120; // !! 30s Luego
+    this.timeRemaining = 10;
     this.startCountdown();
     this.broadcast("tournament-state-update", this.getTournamentState());
 
     console.log(
       `✅ [resetRound] Ronda reiniciada. Estado: ${this.gameState}, tiempo: ${this.timeRemaining}s`
     );
-  }
-
-  spinWheel() {
-    this.winningNumber = this.rouletteEngine.getNextWinningNumber();
-    console.log(
-      `🎯 [spinWheel] ¡Número ganador de la ronda ${this.currentRound}!: ${this.winningNumber.number} (${this.winningNumber.color})`
-    );
-    this.broadcast("tournament-state-update", this.getTournamentState());
-    setTimeout(() => this.nextState(), 6000);
   }
 
   processPayout(winningNumber) {
@@ -365,15 +377,15 @@ export class TournamentRoom {
       });
 
       if (totalWinnings > 0) {
-        player.updateBalance(totalWinnings);
+        player.tournamentBalance += totalWinnings;
       }
 
-      const balanceAfterPayout = player.balance;
+      const balanceAfterPayout = player.tournamentBalance;
       const totalNetResult = totalWinnings - totalBetAmount;
+
       let resultStatus =
         playerBets.size === 0 ? "no_bet" : totalWinnings > 0 ? "win" : "lose";
 
-      // ✅✅✅ AHORA SÍ PODEMOS LOGUEAR, porque `totalNetResult` y `balanceAfterPayout` existen
       console.log(
         `💰 [RESULTADO RONDA ${this.currentRound}] Jugador "${
           player.name
@@ -381,7 +393,7 @@ export class TournamentRoom {
 → Total apostado: $${totalBetAmount}
 → Ganancias totales: $${totalWinnings}
 → Resultado neto: ${totalNetResult >= 0 ? "+" : ""}${totalNetResult}
-→ Balance final: $${balanceAfterPayout}`
+→ Balance de torneo final: $${balanceAfterPayout}`
       );
 
       const payload = {
@@ -403,7 +415,6 @@ export class TournamentRoom {
         );
       }
 
-      // Guardar última apuesta para repeat-bet en siguiente ronda
       const lastPlayerBets = new Map();
       playerBets.forEach((amount, betKey) =>
         lastPlayerBets.set(betKey, amount)
@@ -428,9 +439,9 @@ export class TournamentRoom {
       .map((player) => ({
         id: player.id,
         name: player.name,
-        finalBalance: player.balance,
+        finalBalance: player.tournamentBalance,
       }))
-      .sort((a, b) => b.finalBalance - a.finalBalance); // Mayor balance primero
+      .sort((a, b) => b.finalBalance - a.finalBalance);
   }
 
   distributePrize(standings) {
@@ -454,7 +465,7 @@ export class TournamentRoom {
     if (this.players.size === 0) return null;
     return Array.from(this.players.values())
       .reduce((prev, current) =>
-        prev.balance > current.balance ? prev : current
+        prev.tournamentBalance > current.tournamentBalance ? prev : current
       )
       .toSocketData();
   }
@@ -518,7 +529,6 @@ export class TournamentRoom {
   "place-bet"(playerId, data, callback) {
     const { betKey, amount, round } = data;
 
-    // ✅ VALIDAR RONDA ACTUAL
     if (round !== this.currentRound) {
       console.warn(
         `⚠️ [place-bet] Apuesta rechazada para ${playerId}: ronda enviada (${round}) no coincide con ronda actual (${this.currentRound})`
@@ -551,18 +561,18 @@ export class TournamentRoom {
       return callback?.({ success: false, message: "Jugador no encontrado." });
     }
 
-    // 3. Validar saldo
-    if (player.balance < amount) {
+    // 3. Validar saldo (usar tournamentBalance, no balance)
+    if (player.tournamentBalance < amount) {
       const socket = player.socket;
       if (socket) {
         emitErrorByKey(socket, "INSUFFICIENT_BALANCE", {
           betKey,
           amount,
-          details: { currentBalance: player.balance },
+          details: { currentBalance: player.tournamentBalance },
         });
       }
       console.warn(
-        `⚠️ [place-bet] Saldo insuficiente para ${playerId}: intentó apostar ${amount}, tiene ${player.balance}`
+        `⚠️ [place-bet] Saldo insuficiente para ${playerId}: intentó apostar ${amount}, tiene ${player.tournamentBalance}`
       );
       return callback?.({ success: false, message: "Saldo insuficiente." });
     }
@@ -616,7 +626,7 @@ export class TournamentRoom {
     // 6. Registrar apuesta
     const currentAmount = playerBets.get(betKey) || 0;
     playerBets.set(betKey, currentAmount + amount);
-    player.balance -= amount;
+    player.tournamentBalance -= amount; // ✅ ¡CORREGIDO! Usar tournamentBalance
 
     // 7. Actualizar lastBets
     if (!this.lastBets.has(playerId)) this.lastBets.set(playerId, new Map());
@@ -633,25 +643,25 @@ export class TournamentRoom {
     // 9. Emitir actualización
     if (player.socket) {
       player.socket.emit("tournament-bet-placed", {
-        newBalance: player.balance,
+        newBalance: player.tournamentBalance, // ✅ Usar tournamentBalance
         bets: betsArray,
         totalBet,
       });
       console.log(
-        `📤 [place-bet] Ronda ${this.currentRound} - Emitido 'tournament-bet-placed' a ${playerId}: newBalance=${player.balance}, totalBet=${totalBet}`
+        `📤 [place-bet] Ronda ${this.currentRound} - Emitido 'tournament-bet-placed' a ${playerId}: newBalance=${player.tournamentBalance}, totalBet=${totalBet}`
       );
     }
 
     // 10. Log de apuesta
     console.log(
-      `🎲 [APUESTA] Ronda ${this.currentRound} - Jugador "${player.name}" (${playerId}) apostó $${amount} en "${betKey}". Nuevo balance: $${player.balance}. Total apostado esta ronda: $${totalBet}`
+      `🎲 [APUESTA] Ronda ${this.currentRound} - Jugador "${player.name}" (${playerId}) apostó $${amount} en "${betKey}". Nuevo balance de torneo: $${player.tournamentBalance}. Total apostado esta ronda: $${totalBet}`
     );
 
     // 11. Callback
-    callback?.({ success: true, newBalance: player.balance });
+    callback?.({ success: true, newBalance: player.tournamentBalance });
   }
 
-  "clear-bets"(playerId, callback) {
+  "clear-bets"(playerId, data, callback) {
     if (this.gameState !== GAME_STATES.BETTING)
       return callback?.({
         success: false,
@@ -668,22 +678,22 @@ export class TournamentRoom {
         (sum, amt) => sum + amt,
         0
       );
-      player.updateBalance(totalRefund);
+      player.tournamentBalance += totalRefund;
       this.bets.delete(playerId);
     }
 
     if (player.socket) {
       player.socket.emit("tournament-bets-cleared", {
-        newBalance: player.balance,
+        newBalance: player.tournamentBalance,
         bets: [],
         totalBet: 0,
       });
     }
 
-    callback?.({ success: true, newBalance: player.balance });
+    callback?.({ success: true, newBalance: player.tournamentBalance });
   }
 
-  "undo-bet"(playerId, callback) {
+  "undo-bet"(playerId, data, callback) {
     if (this.gameState !== GAME_STATES.BETTING)
       return callback?.({
         success: false,
@@ -711,19 +721,19 @@ export class TournamentRoom {
     if (!player)
       return callback?.({ success: false, message: "Jugador no encontrado." });
 
-    player.updateBalance(amount);
+    player.tournamentBalance += amount; // ✅ Usar tournamentBalance
 
     if (player.socket) {
       player.socket.emit("tournament-bet-undone", {
-        newBalance: player.balance,
+        newBalance: player.tournamentBalance, // ✅ Usar tournamentBalance
         removedBet: { betKey, amount },
       });
     }
 
-    callback?.({ success: true, newBalance: player.balance });
+    callback?.({ success: true, newBalance: player.tournamentBalance }); // ✅ Usar tournamentBalance
   }
 
-  "repeat-bet"(playerId, callback) {
+  "repeat-bet"(playerId, data, callback) {
     if (this.gameState !== GAME_STATES.BETTING)
       return callback?.({
         success: false,
@@ -743,14 +753,14 @@ export class TournamentRoom {
 
     let totalAmount = 0;
     lastBets.forEach((amount) => (totalAmount += amount));
-    if (player.balance < totalAmount)
+    if (player.tournamentBalance < totalAmount)
       return callback?.({ success: false, message: "Saldo insuficiente." });
 
     const repeatedBets = new Map();
     lastBets.forEach((amount, betKey) => repeatedBets.set(betKey, amount));
 
     this.bets.set(playerId, repeatedBets);
-    player.balance -= totalAmount;
+    player.tournamentBalance -= totalAmount; // ✅ Usar tournamentBalance
 
     const betsArray = Array.from(repeatedBets, ([key, val]) => ({
       betKey: key,
@@ -759,16 +769,16 @@ export class TournamentRoom {
 
     if (player.socket) {
       player.socket.emit("tournament-repeat-bet", {
-        newBalance: player.balance,
+        newBalance: player.tournamentBalance, // ✅ Usar tournamentBalance
         bets: betsArray,
         totalBet: totalAmount,
       });
     }
 
-    callback?.({ success: true, newBalance: player.balance });
+    callback?.({ success: true, newBalance: player.tournamentBalance }); // ✅ Usar tournamentBalance
   }
 
-  "double-bet"(playerId, callback) {
+  "double-bet"(playerId, data, callback) {
     if (this.gameState !== GAME_STATES.BETTING)
       return callback?.({
         success: false,
@@ -789,7 +799,7 @@ export class TournamentRoom {
     let totalAdditionalBet = 0;
     playerBets.forEach((amount) => (totalAdditionalBet += amount));
 
-    if (player.balance < totalAdditionalBet)
+    if (player.tournamentBalance < totalAdditionalBet)
       return callback?.({ success: false, message: "Saldo insuficiente." });
 
     const limitErrors = [];
@@ -814,26 +824,18 @@ export class TournamentRoom {
       return callback?.({ success: false, message: limitErrors[0].reason });
     }
 
+    // ✅ Pasar el callback original a place-bet
     for (const [betKey, amount] of playerBets.entries()) {
-      this.placeBet(playerId, betKey, amount, () => {}, true);
+      this["place-bet"](
+        playerId,
+        { betKey, amount, round: this.currentRound },
+        callback, // ← PASAR EL CALLBACK ORIGINAL
+        true
+      );
     }
 
-    const updatedBets = this.bets.get(playerId) || new Map();
-    const betsArray = Array.from(updatedBets, ([key, val]) => ({
-      betKey: key,
-      amount: val,
-    }));
-    const totalBet = betsArray.reduce((sum, b) => sum + b.amount, 0);
-
-    if (player.socket) {
-      player.socket.emit("tournament-double-bet", {
-        newBalance: player.balance,
-        bets: betsArray,
-        totalBet,
-      });
-    }
-
-    callback?.({ success: true, newBalance: player.balance });
+    // ✅ NO llamar a callback aquí, porque place-bet ya lo hará
+    // callback?.({ success: true, newBalance: player.tournamentBalance });
   }
 
   // ✅ ✅ ✅ MÉTODOS AUXILIARES ASINCRONOS ✅ ✅ ✅
