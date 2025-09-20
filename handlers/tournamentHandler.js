@@ -71,8 +71,7 @@ export const tournamentHandler = (io, socket) => {
         console.warn(
           `⚠️ [tournamentHandler] ¡Jugador ${playerId} YA ESTÁ en sala ${existingRoomId}!`
         );
-        // Opcional: podrías eliminarlo aquí si quieres forzar un solo juego a la vez
-        // existingRoom.removePlayer(playerId);
+        existingRoom.removePlayer(playerId);
       }
     }
 
@@ -222,7 +221,6 @@ export const tournamentHandler = (io, socket) => {
       );
     }
 
-    // ✅ LIMPIEZA CRÍTICA: Eliminar referencias del socket
     if (socket.player && socket.player.id === userId) {
       delete socket.player;
       console.log(
@@ -232,7 +230,6 @@ export const tournamentHandler = (io, socket) => {
     delete socket.roomId;
     console.log(`♻️ [tournamentHandler] socket.roomId limpiado`);
 
-    // Salir de la sala de Socket.IO
     socket.leave(roomId);
 
     if (room.players.size === 0) {
@@ -241,8 +238,6 @@ export const tournamentHandler = (io, socket) => {
         `🗑️ [tournamentHandler] Sala ${roomId} eliminada por estar vacía`
       );
     }
-
-    room.broadcast("tournament-state-update", room.getTournamentState());
   });
 
   socket.on("disconnect", () => {

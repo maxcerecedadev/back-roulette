@@ -239,16 +239,40 @@ router.post("/auth/validate-token", async (req, res) => {
   }
 });
 
+let dailyCounters = {};
+
 router.post("/tournament/create", async (req, res) => {
   const { maxPlayers = 3, maxRounds = 10 } = req.body;
 
   try {
-    const tournamentId = `TOURNEY_${Date.now()}_${Math.random()
-      .toString(36)
-      .substr(2, 9)}`.toUpperCase();
+    // 1. Obtener fecha actual en formato YYMMDD
+    const now = new Date();
+    const year = now.getFullYear().toString().slice(-2); // "25"
+    const month = String(now.getMonth() + 1).padStart(2, "0"); // "04"
+    const day = String(now.getDate()).padStart(2, "0"); // "05"
+    const dateKey = `${year}${month}${day}`; // "250405"
+
+    // 2. Incrementar contador para hoy
+    if (!dailyCounters[dateKey]) {
+      dailyCounters[dateKey] = 1;
+    } else {
+      dailyCounters[dateKey]++;
+    }
+
+    const sequence = String(dailyCounters[dateKey]).padStart(3, "0"); // "001", "002", ...
+
+    // 3. Formar el ID legible
+    const tournamentId = `T_${dateKey}_${sequence}`; // "T_250405_001"
 
     // Opcional: Guardar en DB
-    // await prisma.tournament.create({ ... });
+    // await prisma.tournament.create({
+    //   data: {
+    //     id: tournamentId,
+    //     maxPlayers,
+    //     maxRounds,
+    //     createdAt: now,
+    //   },
+    // });
 
     res.json({
       success: true,
