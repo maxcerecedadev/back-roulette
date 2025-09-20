@@ -8,6 +8,7 @@ const GAME_STATES = {
   BETTING: "betting",
   SPINNING: "spinning",
   PAYOUT: "payout",
+  RESULTS: "results",
   FINISHED: "finished",
 };
 
@@ -236,11 +237,13 @@ export class TournamentRoom {
       this.roundResults.push(roundData);
 
       if (this.currentRound >= this.maxRounds) {
-        this.gameState = GAME_STATES.FINISHED;
+        // ✅ PASO 1: Cambiar a estado RESULTS
+        this.gameState = GAME_STATES.RESULTS;
 
         const finalStandings = this.calculateFinalStandings();
         const prizeDistribution = this.distributePrize(finalStandings);
 
+        // ✅ PASO 2: Asignar premios a los jugadores
         prizeDistribution.forEach(({ playerId, prize }) => {
           const player = this.players.get(playerId);
           if (player) {
@@ -261,27 +264,51 @@ export class TournamentRoom {
           }
         });
 
-        this.broadcast("tournament-finished", {
+        // ✅ PASO 3: EMITIR RESULTADOS (¡esto es lo que verán en pantalla!)
+        this.broadcast("tournament-results", {
           standings: finalStandings,
           prizeDistribution,
           playablePot: this.playablePot,
           houseCut: this.totalPot - this.playablePot,
+          message: "¡Torneo finalizado! Aquí están los resultados finales.",
         });
 
+        console.log(
+          `📊 [Torneo] Mostrando resultados finales por 10 segundos...`
+        );
+
+        // ✅ PASO 4: Guardar torneo en DB
         this.saveTournamentToDB().catch(console.error);
 
+        // ✅ PASO 5: Después de 10 segundos → terminar y desconectar
         setTimeout(() => {
+          // ✅ PASO 5.1: Cambiar a FINISHED
+          this.gameState = GAME_STATES.FINISHED;
+
+          // ✅ PASO 5.2: Notificar que el torneo ha terminado oficialmente
+          this.broadcast("tournament-finished", {
+            standings: finalStandings,
+            prizeDistribution,
+            playablePot: this.playablePot,
+            houseCut: this.totalPot - this.playablePot,
+          });
+
+          // ✅ PASO 5.3: Desconectar a todos los jugadores
           this.players.forEach((player) => {
             if (player.socket?.connected) {
               player.socket.emit("tournament-ended", {
                 reason: "finished",
-                message: "El torneo ha finalizado.",
+                message: "El torneo ha finalizado. Gracias por participar.",
               });
               player.socket.disconnect(true);
             }
           });
-        }, 5000);
+        }, 10000); // ← 10 segundos para ver los resultados
+
+        // ✅ ¡NO HACER NADA MÁS! No resetear ronda, no continuar.
+        return;
       } else {
+        // Si no es la última ronda, continuar normalmente
         this.currentRound++;
         this.resetRound();
       }

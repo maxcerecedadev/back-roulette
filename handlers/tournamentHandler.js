@@ -30,6 +30,32 @@ export const tournamentHandler = (io, socket) => {
     const isNewRoom = !gameManager.getRoom(roomId);
     const isCreator = isNewRoom;
 
+    // 🔁 LIMPIAR JUGADOR Y SALA ANTERIOR si existe
+    if (socket.player) {
+      console.log(
+        `♻️ [Torneo] Limpiando jugador anterior: ${socket.player.id}`
+      );
+      for (const [
+        existingRoomId,
+        existingRoom,
+      ] of gameManager.tournamentRooms.entries()) {
+        if (existingRoom.players.has(socket.player.id)) {
+          console.log(
+            `🚪 Eliminando jugador ${socket.player.id} de sala anterior ${existingRoomId}`
+          );
+          existingRoom.removePlayer(socket.player.id);
+          if (existingRoom.players.size === 0) {
+            gameManager.removeRoom(existingRoomId);
+            console.log(
+              `🗑️ Sala anterior ${existingRoomId} eliminada (quedó vacía)`
+            );
+          }
+        }
+      }
+      delete socket.player;
+      delete socket.roomId;
+    }
+
     const player = new Player(userId, userName, balance, isCreator);
     socket.player = player;
 
@@ -91,6 +117,7 @@ export const tournamentHandler = (io, socket) => {
       }
     }
   });
+
   socket.on("tournament-start", ({ creatorId }) => {
     const roomId = socket.roomId;
     if (!roomId) {
@@ -195,6 +222,19 @@ export const tournamentHandler = (io, socket) => {
       );
     }
 
+    // ✅ LIMPIEZA CRÍTICA: Eliminar referencias del socket
+    if (socket.player && socket.player.id === userId) {
+      delete socket.player;
+      console.log(
+        `♻️ [tournamentHandler] socket.player limpiado para ${userId}`
+      );
+    }
+    delete socket.roomId;
+    console.log(`♻️ [tournamentHandler] socket.roomId limpiado`);
+
+    // Salir de la sala de Socket.IO
+    socket.leave(roomId);
+
     if (room.players.size === 0) {
       gameManager.removeRoom(roomId);
       console.log(
@@ -217,6 +257,12 @@ export const tournamentHandler = (io, socket) => {
         );
 
         room.removePlayer(player.id);
+
+        delete socket.player;
+        delete socket.roomId;
+        console.log(
+          `♻️ [Torneo] Referencias de socket limpiadas tras desconexión`
+        );
 
         console.log(
           `👥 [Torneo] Sala ${roomId} ahora tiene ${room.players.size} jugadores`

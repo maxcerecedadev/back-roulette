@@ -20,8 +20,15 @@ export const singlePlayerHandler = (io, socket) => {
   socket.on("single-join", (data, callback) => {
     console.log(`🎯 [singlePlayerHandler] single-join recibido:`, data);
     const { userId, userName, balance } = data;
-    const player = new Player(userId, userName, balance);
 
+    if (socket.player) {
+      console.log(
+        `♻️ Reemplazando jugador anterior: ${socket.player.id} → ${userId}`
+      );
+      delete socket.player;
+    }
+
+    const player = new Player(userId, userName, balance);
     socket.player = player;
 
     const roomId = socket.id;
