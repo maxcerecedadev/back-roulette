@@ -1,8 +1,8 @@
-// src/handlers/tournamentHandler.js
+// src/infrastructure/ws/tournamentHandler.js
 
-import { Player } from "../classes/Player.js";
-import * as gameManager from "../managers/gameManager.js";
-import { TournamentRoom } from "../classes/TournamentRoom.js";
+import { Player } from "#domain/entities/Player.js";
+import * as gameManager from "#app/managers/gameManager.js";
+import { TournamentRoom } from "#domain/entities/TournamentRoom.js";
 
 export const tournamentHandler = (io, socket) => {
   const getPlayerId = () => {

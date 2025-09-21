@@ -1,4 +1,5 @@
-// src/utils/timezone.js
+// src/shared/timezone.js
+
 import { format } from "date-fns-tz";
 
 export const formatDateForExternalAPI = (date = new Date(), formatStr = "yyyy-MM-dd HH:mm:ss") => {

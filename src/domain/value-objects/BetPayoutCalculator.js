@@ -1,4 +1,4 @@
-// src/classes/BetPayoutCalculator.js
+// src/domain/value-objects/BetPayoutCalculator.js
 
 export class BetPayoutCalculator {
   /**

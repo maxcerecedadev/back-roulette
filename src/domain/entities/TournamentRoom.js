@@ -1,9 +1,9 @@
-// src/classes/TournamentRoom.js
+// src/domain/entities/TournamentRoom.js
 
-import { RouletteEngine } from "./RouletteEngine.js";
-import { emitErrorByKey } from "../utils/errorHandler.js";
-import { BetLimits } from "./BetLimits.js";
-import prisma from "../../prisma/index.js";
+import { RouletteEngine } from "#domain/entities/RouletteEngine.js";
+import { emitErrorByKey } from "#shared/errorHandler.js";
+import { BetLimits } from "#domain/value-objects/BetLimits.js";
+import prisma from "#prisma";
 
 const GAME_STATES = {
   BETTING: "betting",

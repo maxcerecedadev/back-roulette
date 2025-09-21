@@ -1,11 +1,11 @@
-// src/routes/gameRoutes.js
+// src/infrastructure/http/routes/gameRoutes.js
 
-import { Router } from "express";
-import { adminAuth } from "../middleware/adminAuth.js";
-import * as gameManager from "../managers/gameManager.js";
-import prisma from "../../prisma/index.js";
-import { v4 as uuidv4 } from "uuid";
 import axios from "axios";
+import { Router } from "express";
+import * as gameManager from "#app/managers/gameManager.js";
+import { v4 as uuidv4 } from "uuid";
+import { adminAuth } from "#infra/http/middleware/adminAuth.js";
+import prisma from "#prisma";
 
 const router = Router();
 

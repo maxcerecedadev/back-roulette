@@ -1,4 +1,4 @@
-// src/middleware/adminAuth.js
+// src/infrastructure/http/middleware/adminAuth.js
 
 import dotenv from "dotenv";
 dotenv.config();

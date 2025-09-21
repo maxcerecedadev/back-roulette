@@ -1,9 +1,9 @@
-// src/services/casinoApiService.js
+// src/infrastructure/api/casinoApiService.js
 
 import axios from "axios";
-import prisma from "../../prisma/index.js";
+import prisma from "#prisma";
 import { v4 as uuidv4 } from "uuid";
-import { formatDateForExternalAPI } from "../utils/timezone.js";
+import { formatDateForExternalAPI } from "#shared/timezone.js";
 
 const API_BASE_URL = process.env.CASINO_API_BASE_URL;
 

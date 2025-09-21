@@ -1,7 +1,7 @@
-// src/utils/errorHandler.js
-// utils/errorHandler.js
+// src/shared/errorHandler.js
+
 import { v4 as uuidv4 } from "uuid";
-import { getErrorDefinition } from "../constants/errorMessages.js";
+import { getErrorDefinition } from "#shared/errorMessages.js";
 
 /**
  * Emite un error estructurado usando una clave predefinida.

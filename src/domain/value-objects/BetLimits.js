@@ -1,4 +1,4 @@
-// src/classes/BetLimits.js
+// src/domain/value-objects/BetLimits.js
 
 export class BetLimits {
   static MAX_BETS = {

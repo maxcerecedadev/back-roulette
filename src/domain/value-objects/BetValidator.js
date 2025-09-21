@@ -1,4 +1,4 @@
-// src/classes/BetValidator.js
+// src/domain/value-objects/BetValidator.js
 
 export class BetValidator {
   static MAX_COVERED_NUMBERS = 27;

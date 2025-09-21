@@ -1,4 +1,4 @@
-// src/classes/Player.js
+// src/domain/entities/Player.js
 
 export class Player {
   /**

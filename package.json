@@ -36,5 +36,13 @@
     "jest": "^30.1.3",
     "nodemon": "^3.1.4",
     "prettier": "^3.6.2"
+  },
+  "imports": {
+    "#src/*": "./src/*",
+    "#app/*":"./src/application/*",
+    "#domain/*": "./src/domain/*",
+    "#infra/*": "./src/infrastructure/*",
+    "#shared/*": "./src/shared/*",
+    "#prisma": "./prisma/index.js"
   }
 }

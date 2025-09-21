@@ -1,7 +1,7 @@
-// src/handlers/singlePlayerHandler.js
+// src/infrastructure/ws/singlePlayerHandler.js
 
-import { Player } from "../classes/Player.js";
-import * as gameManager from "../managers/gameManager.js";
+import * as gameManager from "#app/managers/gameManager.js";
+import { Player } from "#domain/entities/Player.js";
 
 /**
  * @param {object} socket - La instancia del socket del cliente que se ha conectado.

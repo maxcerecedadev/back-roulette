@@ -52,3 +52,47 @@ flowchart LR
     casinoServiceAdapter -- Makes requests to | HTTP/S --> casinoApi
     prismaClient -- Connects to | SQL --> database
 ```
+
+```mermaid
+flowchart TD
+    A[server.js] -->|Arranca Express + Socket.IO| B[Infrastructure Layer]
+
+    %% Infrastructure
+    subgraph B[Infrastructure]
+        B1[HTTP Routes]
+        B2[Middleware]
+        B3[WebSocket Handlers]
+        B4[External API Service]
+        B5[Prisma ORM]
+    end
+
+    %% Application
+    subgraph C[Application Layer]
+        C1[Managers]
+    end
+
+    %% Domain
+    subgraph D[Domain Layer]
+        D1[Entities]
+        D2[Value Objects]
+    end
+
+    %% Shared
+    subgraph E[Shared]
+        E1[Error Handler]
+        E2[Constants & Utils]
+    end
+
+    %% Connections
+    B1 --> C1
+    B3 --> C1
+    B4 --> C1
+    B5 --> C1
+    C1 --> D1
+    C1 --> D2
+    C1 --> E
+
+    %% DB
+    B5 --> F[(Database)]
+
+```

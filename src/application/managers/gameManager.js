@@ -1,7 +1,7 @@
-// src/managers/gameManager.js
+// src/application/managers/gameManager.js
 
-import { SinglePlayerRoom } from "../classes/SinglePlayerRoom.js";
-import { TournamentRoom } from "../classes/TournamentRoom.js";
+import { SinglePlayerRoom } from "#domain/entities/SinglePlayerRoom.js";
+import { TournamentRoom } from "#domain/entities/TournamentRoom.js";
 
 const singleRooms = new Map();
 const tournamentRooms = new Map();

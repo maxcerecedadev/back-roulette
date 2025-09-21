@@ -1,10 +1,10 @@
-// src/classes/SinglePlayerRoom.js
+// src/domain/entities/SinglePlayerRoom.js
 
-import { RouletteEngine } from "./RouletteEngine.js";
-import { emitErrorByKey } from "../utils/errorHandler.js";
-import { BetLimits } from "./BetLimits.js";
-import prisma from "../../prisma/index.js";
-import { CasinoApiService } from "../services/casinoApiService.js";
+import { RouletteEngine } from "#domain/entities/RouletteEngine.js";
+import { emitErrorByKey } from "#shared/errorHandler.js";
+import { BetLimits } from "#domain/value-objects/BetLimits.js";
+import prisma from "#prisma";
+import { CasinoApiService } from "#infra/api/casinoApiService.js";
 
 const GAME_STATES = {
   BETTING: "betting",

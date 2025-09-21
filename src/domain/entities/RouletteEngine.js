@@ -1,8 +1,8 @@
-// src/classes/RouletteEngine.js
+// src/domain/entities/RouletteEngine.js
 
-import { BetValidator } from "./BetValidator.js";
-import { BetPayoutCalculator } from "./BetPayoutCalculator.js";
-import { BetLimits } from "./BetLimits.js";
+import { BetValidator } from "#domain/value-objects/BetValidator.js";
+import { BetPayoutCalculator } from "#domain/value-objects/BetPayoutCalculator.js";
+import { BetLimits } from "#domain/value-objects/BetLimits.js";
 
 export class RouletteEngine {
   static RED_NUMBERS = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
