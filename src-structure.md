@@ -1,0 +1,27 @@
+# 📂 Estructura de src
+
+- 📂 classes
+  - 📄 BetLimits.js
+  - 📄 BetPayoutCalculator.js
+  - 📄 BetValidator.js
+  - 📄 Player.js
+  - 📄 RouletteEngine.js
+  - 📄 SinglePlayerRoom.js
+  - 📄 TournamentRoom.js
+- 📂 constants
+  - 📄 errorMessages.js
+- 📂 handlers
+  - 📄 singlePlayerHandler.js
+  - 📄 tournamentHandler.js
+- 📂 managers
+  - 📄 gameManager.js
+- 📂 middleware
+  - 📄 adminAuth.js
+- 📂 routes
+  - 📄 gameRoutes.js
+- 📄 server.js
+- 📂 services
+  - 📄 casinoApiService.js
+- 📂 utils
+  - 📄 errorHandler.js
+  - 📄 timezone.js

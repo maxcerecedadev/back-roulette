@@ -1,4 +1,4 @@
-// src/services/gameManager.js
+// src/managers/gameManager.js
 
 import { SinglePlayerRoom } from "../classes/SinglePlayerRoom.js";
 import { TournamentRoom } from "../classes/TournamentRoom.js";
@@ -6,7 +6,6 @@ import { TournamentRoom } from "../classes/TournamentRoom.js";
 const singleRooms = new Map();
 const tournamentRooms = new Map();
 
-// Constante para gestionar tipos de sala de forma centralizada
 const ROOM_TYPES = [
   { name: "tournament", map: tournamentRooms },
   { name: "single", map: singleRooms },
@@ -18,6 +17,7 @@ const ROOM_TYPES = [
  * @param {object} io - La instancia de Socket.IO.
  * @returns {SinglePlayerRoom} La instancia de la sala.
  */
+
 export const getOrCreateSingleRoom = (roomId, io) => {
   if (!singleRooms.has(roomId)) {
     const newRoom = new SinglePlayerRoom(io, roomId);
@@ -36,13 +36,12 @@ export const getOrCreateSingleRoom = (roomId, io) => {
  * @param {string} creatorId - ID del creador de la sala.
  * @returns {TournamentRoom} La instancia de la sala.
  */
+
 export const getOrCreateTournamentRoom = (roomId, io, creatorId) => {
   if (!tournamentRooms.has(roomId)) {
     const newRoom = new TournamentRoom(io, roomId, creatorId);
     tournamentRooms.set(roomId, newRoom);
-    console.log(
-      `🏆 [GameManager] Sala TORNEO creada: ${roomId} (creador: ${creatorId})`
-    );
+    console.log(`🏆 [GameManager] Sala TORNEO creada: ${roomId} (creador: ${creatorId})`);
     return newRoom;
   }
   console.log(`🔁 [GameManager] Sala TORNEO existente obtenida: ${roomId}`);
@@ -54,6 +53,7 @@ export const getOrCreateTournamentRoom = (roomId, io, creatorId) => {
  * @param {string} roomId - El ID de la sala.
  * @returns {SinglePlayerRoom | TournamentRoom | undefined} La instancia de la sala o undefined si no se encuentra.
  */
+
 export const getRoom = (roomId) => {
   for (const { map } of ROOM_TYPES) {
     if (map.has(roomId)) {
@@ -68,12 +68,12 @@ export const getRoom = (roomId) => {
  * @param {string} roomId - El ID de la sala.
  * @returns {boolean} True si la sala fue eliminada, false de lo contrario.
  */
+
 export const removeRoom = (roomId) => {
   for (const { name, map } of ROOM_TYPES) {
     if (map.has(roomId)) {
       const room = map.get(roomId);
 
-      // Notificar y desconectar jugadores
       room.players?.forEach((player) => {
         const socket = player.socket;
         if (socket && socket.connected) {
@@ -84,18 +84,13 @@ export const removeRoom = (roomId) => {
             });
             socket.disconnect(true);
           } catch (err) {
-            console.warn(
-              `⚠️ No se pudo notificar a socket ${socket.id}:`,
-              err.message
-            );
+            console.warn(`⚠️ No se pudo notificar a socket ${socket.id}:`, err.message);
           }
         }
       });
 
-      // Detener temporizadores si existen
       if (room.stopCountdown) room.stopCountdown();
 
-      // Eliminar del mapa
       map.delete(roomId);
       console.log(`🗑️ Sala ${roomId} (${name}) eliminada del manager.`);
       return true;
@@ -108,15 +103,14 @@ export const removeRoom = (roomId) => {
  * Obtiene el estado de todas las salas activas.
  * @returns {Array<object>} Un array con los detalles de cada sala.
  */
+
 export const getRooms = () => {
   const allRooms = [...singleRooms.values(), ...tournamentRooms.values()];
   return allRooms.map((room) => ({
     id: room.id,
     gameState: room.gameState,
     playersCount: room.players?.size || 0,
-    players: Array.from(room.players?.values() || []).map((player) =>
-      player.toSocketData()
-    ),
+    players: Array.from(room.players?.values() || []).map((player) => player.toSocketData()),
   }));
 };
 
@@ -125,6 +119,7 @@ export const getRooms = () => {
  * @param {string} roomId - El ID de la sala a buscar.
  * @returns {object | null} El estado de la sala o null si no se encuentra.
  */
+
 export const getStatus = (roomId) => {
   if (!roomId) return getRooms();
 
@@ -138,21 +133,16 @@ export const getStatus = (roomId) => {
     room instanceof TournamentRoom
       ? "tournament"
       : room instanceof SinglePlayerRoom
-      ? "single"
-      : "unknown";
+        ? "single"
+        : "unknown";
 
-  console.log(
-    `[getStatus] 🧭 Obteniendo estado de sala ${roomId} (tipo: ${roomType})`
-  );
+  console.log(`[getStatus] 🧭 Obteniendo estado de sala ${roomId} (tipo: ${roomType})`);
 
   return {
     roomId: room.id,
     gameState: room.gameState,
     players: Array.from(room.players?.values() || []).map((player) => {
-      // ⚠️ En producción, considera reemplazar esto por un logger con nivel 'debug'
-      console.log(
-        `[getStatus] 👤 Jugador en sala: ${player.id} - ${player.name}`
-      );
+      console.log(`[getStatus] 👤 Jugador en sala: ${player.id} - ${player.name}`);
       return player.toSocketData();
     }),
   };
@@ -163,19 +153,18 @@ export const getStatus = (roomId) => {
  * @param {string} roomId - El ID de la sala.
  * @returns {Array<object>} Array de resultados {number, color}.
  */
+
 export function peekResults(roomId) {
   const room = getRoom(roomId);
   if (!room) return null;
   return room.peekQueue?.(20) || null;
 }
 
-// ✅ Exporta solo funciones, NO los mapas internos
-// ❌ NO exportamos: singleRooms, tournamentRooms
-
 /**
- * (Opcional) Para debugging o herramientas de admin, expón los IDs, no los objetos.
+ * Para debugging o herramientas de admin, expón los IDs, no los objetos.
  * @returns {object} Lista de IDs de salas por tipo.
  */
+
 export const getRoomsForAdmin = () => ({
   single: Array.from(singleRooms.keys()),
   tournament: Array.from(tournamentRooms.keys()),

@@ -1,8 +1,9 @@
 // src/classes/TournamentRoom.js
+
 import { RouletteEngine } from "./RouletteEngine.js";
 import { emitErrorByKey } from "../utils/errorHandler.js";
 import { BetLimits } from "./BetLimits.js";
-import prisma from "../prisma/index.js";
+import prisma from "../../prisma/index.js";
 
 const GAME_STATES = {
   BETTING: "betting",
@@ -37,9 +38,7 @@ export class TournamentRoom {
   }
 
   broadcast(event, data) {
-    console.log(
-      `📢 [broadcast] Emitiendo evento '${event}' a todos en sala ${this.id}`
-    );
+    console.log(`📢 [broadcast] Emitiendo evento '${event}' a todos en sala ${this.id}`);
     this.server.to(this.id).emit(event, data);
   }
 
@@ -55,7 +54,7 @@ export class TournamentRoom {
 
     if (player.balance < this.entryFee) {
       throw new Error(
-        "Saldo insuficiente para inscribirse en el torneo (se requieren 10.000 fichas)."
+        "Saldo insuficiente para inscribirse en el torneo (se requieren 10.000 fichas).",
       );
     }
 
@@ -67,7 +66,7 @@ export class TournamentRoom {
     this.totalPot += this.entryFee;
 
     console.log(
-      `🎟️ [TournamentRoom.addPlayer] Jugador ${player.id} (${player.name}) pagó ${this.entryFee} fichas. Balance real restante: ${player.balance}. Balance de torneo: ${player.tournamentBalance}. Poso total: ${this.totalPot}`
+      `🎟️ [TournamentRoom.addPlayer] Jugador ${player.id} (${player.name}) pagó ${this.entryFee} fichas. Balance real restante: ${player.balance}. Balance de torneo: ${player.tournamentBalance}. Poso total: ${this.totalPot}`,
     );
 
     player.socket = socket;
@@ -100,13 +99,11 @@ export class TournamentRoom {
       throw new Error("El torneo ya ha comenzado.");
     }
 
-    this.playablePot = Math.floor(
-      this.totalPot * (1 - this.houseCutPercentage)
-    );
+    this.playablePot = Math.floor(this.totalPot * (1 - this.houseCutPercentage));
     console.log(
       `💰 [TournamentRoom] Torneo iniciado. Poso total: ${
         this.totalPot
-      }. Casa: ${this.totalPot - this.playablePot}. Premio: ${this.playablePot}`
+      }. Casa: ${this.totalPot - this.playablePot}. Premio: ${this.playablePot}`,
     );
 
     this.isStarted = true;
@@ -148,7 +145,7 @@ export class TournamentRoom {
     if (this.players.has(playerId)) {
       const playerName = this.players.get(playerId)?.name || "Desconocido";
       console.log(
-        `🚪 [TournamentRoom.removePlayer] Jugador ${playerId} (${playerName}) ELIMINADO de sala de torneo ${this.id}`
+        `🚪 [TournamentRoom.removePlayer] Jugador ${playerId} (${playerName}) ELIMINADO de sala de torneo ${this.id}`,
       );
 
       this.players.delete(playerId);
@@ -190,10 +187,7 @@ export class TournamentRoom {
 
       Array.from(this.players.keys()).forEach((playerId) => {
         this.attemptPlaceBet(playerId).catch((err) => {
-          console.error(
-            `❌ Error confirmando apuestas para ${playerId}:`,
-            err.message
-          );
+          console.error(`❌ Error confirmando apuestas para ${playerId}:`, err.message);
           this.logFailedTransaction(playerId, "BET", 0, err.message);
         });
       });
@@ -216,7 +210,7 @@ export class TournamentRoom {
           playerBets.forEach((amount, betKey) => {
             const profitMultiplier = this.rouletteEngine.calculatePayout(
               this.winningNumber,
-              betKey
+              betKey,
             );
             if (profitMultiplier > 0) {
               totalWinnings += amount * profitMultiplier;
@@ -249,7 +243,7 @@ export class TournamentRoom {
           if (player) {
             player.balance += prize;
             console.log(
-              `🏆 [PREMIO] Jugador ${player.name} (${playerId}) ganó ${prize} fichas. Nuevo saldo real: ${player.balance}`
+              `🏆 [PREMIO] Jugador ${player.name} (${playerId}) ganó ${prize} fichas. Nuevo saldo real: ${player.balance}`,
             );
 
             if (player.socket) {
@@ -273,9 +267,7 @@ export class TournamentRoom {
           message: "¡Torneo finalizado! Aquí están los resultados finales.",
         });
 
-        console.log(
-          `📊 [Torneo] Mostrando resultados finales por 10 segundos...`
-        );
+        console.log(`📊 [Torneo] Mostrando resultados finales por 10 segundos...`);
 
         // ✅ PASO 4: Guardar torneo en DB
         this.saveTournamentToDB().catch(console.error);
@@ -318,7 +310,7 @@ export class TournamentRoom {
   spinWheel() {
     this.winningNumber = this.rouletteEngine.getNextWinningNumber();
     console.log(
-      `🎯 [spinWheel] ¡Número ganador de la ronda ${this.currentRound}!: ${this.winningNumber.number} (${this.winningNumber.color})`
+      `🎯 [spinWheel] ¡Número ganador de la ronda ${this.currentRound}!: ${this.winningNumber.number} (${this.winningNumber.color})`,
     );
     this.broadcast("tournament-state-update", this.getTournamentState());
     setTimeout(() => this.nextState(), 6000);
@@ -328,7 +320,7 @@ export class TournamentRoom {
     console.log(
       `🔄 [resetRound] Reiniciando ronda ${this.currentRound + 1}/${
         this.maxRounds
-      } en sala ${this.id}`
+      } en sala ${this.id}`,
     );
 
     this.winningNumber = null;
@@ -340,13 +332,13 @@ export class TournamentRoom {
     this.broadcast("tournament-state-update", this.getTournamentState());
 
     console.log(
-      `✅ [resetRound] Ronda reiniciada. Estado: ${this.gameState}, tiempo: ${this.timeRemaining}s`
+      `✅ [resetRound] Ronda reiniciada. Estado: ${this.gameState}, tiempo: ${this.timeRemaining}s`,
     );
   }
 
   processPayout(winningNumber) {
     console.log(
-      `💸 [processPayout] Iniciando cálculo de pagos para ronda ${this.currentRound}. Número ganador: ${winningNumber.number} (${winningNumber.color})`
+      `💸 [processPayout] Iniciando cálculo de pagos para ronda ${this.currentRound}. Número ganador: ${winningNumber.number} (${winningNumber.color})`,
     );
 
     this.players.forEach((player, playerId) => {
@@ -357,10 +349,7 @@ export class TournamentRoom {
 
       playerBets.forEach((amount, betKey) => {
         totalBetAmount += amount;
-        const profitMultiplier = this.rouletteEngine.calculatePayout(
-          winningNumber,
-          betKey
-        );
+        const profitMultiplier = this.rouletteEngine.calculatePayout(winningNumber, betKey);
         const isWin = profitMultiplier > 0;
         let winnings = 0;
         let netWin = 0;
@@ -390,7 +379,7 @@ export class TournamentRoom {
         console.log(
           `📊 [processPayout] Jugador ${playerId} - Apuesta: ${betKey} ($${amount}) → ${
             isWin ? "✅ GANÓ" : "❌ PERDIÓ"
-          } → Ganancia: $${winnings}, Neto: $${netWin}`
+          } → Ganancia: $${winnings}, Neto: $${netWin}`,
         );
       });
 
@@ -401,17 +390,14 @@ export class TournamentRoom {
       const balanceAfterPayout = player.tournamentBalance;
       const totalNetResult = totalWinnings - totalBetAmount;
 
-      let resultStatus =
-        playerBets.size === 0 ? "no_bet" : totalWinnings > 0 ? "win" : "lose";
+      let resultStatus = playerBets.size === 0 ? "no_bet" : totalWinnings > 0 ? "win" : "lose";
 
       console.log(
-        `💰 [RESULTADO RONDA ${this.currentRound}] Jugador "${
-          player.name
-        }" (${playerId}): 
+        `💰 [RESULTADO RONDA ${this.currentRound}] Jugador "${player.name}" (${playerId}): 
 → Total apostado: $${totalBetAmount}
 → Ganancias totales: $${totalWinnings}
 → Resultado neto: ${totalNetResult >= 0 ? "+" : ""}${totalNetResult}
-→ Balance de torneo final: $${balanceAfterPayout}`
+→ Balance de torneo final: $${balanceAfterPayout}`,
       );
 
       const payload = {
@@ -429,14 +415,12 @@ export class TournamentRoom {
       if (player.socket) {
         player.socket.emit("tournament-round-result", payload);
         console.log(
-          `📤 [processPayout] Emitido 'tournament-round-result' a ${playerId}: balance=${balanceAfterPayout}, neto=${totalNetResult}, estado=${resultStatus}`
+          `📤 [processPayout] Emitido 'tournament-round-result' a ${playerId}: balance=${balanceAfterPayout}, neto=${totalNetResult}, estado=${resultStatus}`,
         );
       }
 
       const lastPlayerBets = new Map();
-      playerBets.forEach((amount, betKey) =>
-        lastPlayerBets.set(betKey, amount)
-      );
+      playerBets.forEach((amount, betKey) => lastPlayerBets.set(betKey, amount));
       this.lastBets.set(playerId, lastPlayerBets);
 
       this.saveRoundToDB(
@@ -445,7 +429,7 @@ export class TournamentRoom {
         totalBetAmount,
         totalWinnings,
         betResults,
-        winningNumber
+        winningNumber,
       ).catch(console.error);
     });
 
@@ -466,9 +450,7 @@ export class TournamentRoom {
     if (standings.length === 0 || this.playablePot <= 0) return [];
 
     const topBalance = standings[0].finalBalance;
-    const tiedPlayers = standings.filter(
-      (player) => player.finalBalance === topBalance
-    );
+    const tiedPlayers = standings.filter((player) => player.finalBalance === topBalance);
 
     const prizePerPlayer = Math.floor(this.playablePot / tiedPlayers.length);
 
@@ -483,7 +465,7 @@ export class TournamentRoom {
     if (this.players.size === 0) return null;
     return Array.from(this.players.values())
       .reduce((prev, current) =>
-        prev.tournamentBalance > current.tournamentBalance ? prev : current
+        prev.tournamentBalance > current.tournamentBalance ? prev : current,
       )
       .toSocketData();
   }
@@ -506,14 +488,7 @@ export class TournamentRoom {
     }
   }
 
-  async saveRoundToDB(
-    player,
-    playerId,
-    totalBetAmount,
-    totalWinnings,
-    betResults,
-    winningNumber
-  ) {
+  async saveRoundToDB(player, playerId, totalBetAmount, totalWinnings, betResults, winningNumber) {
     try {
       await prisma.rouletteRound.create({
         data: {
@@ -537,10 +512,7 @@ export class TournamentRoom {
         },
       });
     } catch (err) {
-      console.error(
-        `❌ Error guardando ronda para ${playerId} en torneo:`,
-        err
-      );
+      console.error(`❌ Error guardando ronda para ${playerId} en torneo:`, err);
     }
   }
 
@@ -549,7 +521,7 @@ export class TournamentRoom {
 
     if (round !== this.currentRound) {
       console.warn(
-        `⚠️ [place-bet] Apuesta rechazada para ${playerId}: ronda enviada (${round}) no coincide con ronda actual (${this.currentRound})`
+        `⚠️ [place-bet] Apuesta rechazada para ${playerId}: ronda enviada (${round}) no coincide con ronda actual (${this.currentRound})`,
       );
       return callback?.({
         success: false,
@@ -562,7 +534,7 @@ export class TournamentRoom {
       const socket = this.getPlayerSocket(playerId);
       if (socket) emitErrorByKey(socket, "GAME_STATE_INVALID");
       console.warn(
-        `⚠️ [place-bet] Apuesta rechazada para ${playerId}: estado actual = ${this.gameState}`
+        `⚠️ [place-bet] Apuesta rechazada para ${playerId}: estado actual = ${this.gameState}`,
       );
       return callback?.({
         success: false,
@@ -573,9 +545,7 @@ export class TournamentRoom {
     // 2. Obtener jugador
     const player = this.players.get(playerId);
     if (!player) {
-      console.warn(
-        `⚠️ [place-bet] Jugador ${playerId} no encontrado en sala ${this.id}`
-      );
+      console.warn(`⚠️ [place-bet] Jugador ${playerId} no encontrado en sala ${this.id}`);
       return callback?.({ success: false, message: "Jugador no encontrado." });
     }
 
@@ -590,7 +560,7 @@ export class TournamentRoom {
         });
       }
       console.warn(
-        `⚠️ [place-bet] Saldo insuficiente para ${playerId}: intentó apostar ${amount}, tiene ${player.tournamentBalance}`
+        `⚠️ [place-bet] Saldo insuficiente para ${playerId}: intentó apostar ${amount}, tiene ${player.tournamentBalance}`,
       );
       return callback?.({ success: false, message: "Saldo insuficiente." });
     }
@@ -602,23 +572,13 @@ export class TournamentRoom {
     // 5. Validar apuesta
     let validation;
     if (playerBets.has(betKey)) {
-      const limitValidation = BetLimits.validateBetAmount(
-        betKey,
-        playerBets,
-        amount
-      );
+      const limitValidation = BetLimits.validateBetAmount(betKey, playerBets, amount);
       validation = {
         allowed: limitValidation.allowed,
-        reasonCode: limitValidation.allowed
-          ? undefined
-          : "BET_TYPE_LIMIT_EXCEEDED",
+        reasonCode: limitValidation.allowed ? undefined : "BET_TYPE_LIMIT_EXCEEDED",
       };
     } else {
-      validation = this.rouletteEngine.isBetAllowedDetailed(
-        betKey,
-        playerBets,
-        amount
-      );
+      validation = this.rouletteEngine.isBetAllowedDetailed(betKey, playerBets, amount);
     }
 
     if (!validation.allowed) {
@@ -633,7 +593,7 @@ export class TournamentRoom {
       console.warn(
         `⚠️ [place-bet] Apuesta no permitida para ${playerId}: ${
           validation.details?.reason || "Razón desconocida"
-        }`
+        }`,
       );
       return callback?.({
         success: false,
@@ -665,13 +625,13 @@ export class TournamentRoom {
         totalBet,
       });
       console.log(
-        `📤 [place-bet] Ronda ${this.currentRound} - Emitido 'tournament-bet-placed' a ${playerId}: newBalance=${player.tournamentBalance}, totalBet=${totalBet}`
+        `📤 [place-bet] Ronda ${this.currentRound} - Emitido 'tournament-bet-placed' a ${playerId}: newBalance=${player.tournamentBalance}, totalBet=${totalBet}`,
       );
     }
 
     // 10. Log de apuesta
     console.log(
-      `🎲 [APUESTA] Ronda ${this.currentRound} - Jugador "${player.name}" (${playerId}) apostó $${amount} en "${betKey}". Nuevo balance de torneo: $${player.tournamentBalance}. Total apostado esta ronda: $${totalBet}`
+      `🎲 [APUESTA] Ronda ${this.currentRound} - Jugador "${player.name}" (${playerId}) apostó $${amount} en "${betKey}". Nuevo balance de torneo: $${player.tournamentBalance}. Total apostado esta ronda: $${totalBet}`,
     );
 
     // 11. Callback
@@ -686,15 +646,11 @@ export class TournamentRoom {
       });
 
     const player = this.players.get(playerId);
-    if (!player)
-      return callback?.({ success: false, message: "Jugador no encontrado." });
+    if (!player) return callback?.({ success: false, message: "Jugador no encontrado." });
 
     let totalRefund = 0;
     if (this.bets.has(playerId)) {
-      totalRefund = Array.from(this.bets.get(playerId).values()).reduce(
-        (sum, amt) => sum + amt,
-        0
-      );
+      totalRefund = Array.from(this.bets.get(playerId).values()).reduce((sum, amt) => sum + amt, 0);
       player.tournamentBalance += totalRefund;
       this.bets.delete(playerId);
     }
@@ -735,8 +691,7 @@ export class TournamentRoom {
     playerBets.delete(betKey);
 
     const player = this.players.get(playerId);
-    if (!player)
-      return callback?.({ success: false, message: "Jugador no encontrado." });
+    if (!player) return callback?.({ success: false, message: "Jugador no encontrado." });
 
     player.tournamentBalance += amount;
     if (player.socket) {
@@ -757,8 +712,7 @@ export class TournamentRoom {
       });
 
     const player = this.players.get(playerId);
-    if (!player)
-      return callback?.({ success: false, message: "Jugador no encontrado." });
+    if (!player) return callback?.({ success: false, message: "Jugador no encontrado." });
 
     const lastBets = this.lastBets.get(playerId);
     if (!lastBets || lastBets.size === 0)
@@ -809,8 +763,7 @@ export class TournamentRoom {
       });
 
     const player = this.players.get(playerId);
-    if (!player)
-      return callback?.({ success: false, message: "Jugador no encontrado." });
+    if (!player) return callback?.({ success: false, message: "Jugador no encontrado." });
 
     let totalAdditionalBet = 0;
     playerBets.forEach((amount) => (totalAdditionalBet += amount));
@@ -820,11 +773,7 @@ export class TournamentRoom {
 
     const limitErrors = [];
     for (const [betKey, amount] of playerBets.entries()) {
-      const limitValidation = BetLimits.validateBetAmount(
-        betKey,
-        playerBets,
-        amount
-      );
+      const limitValidation = BetLimits.validateBetAmount(betKey, playerBets, amount);
       if (!limitValidation.allowed) {
         limitErrors.push({ betKey, reason: `Límite excedido para ${betKey}` });
       }
@@ -841,12 +790,7 @@ export class TournamentRoom {
     }
 
     for (const [betKey, amount] of playerBets.entries()) {
-      this["place-bet"](
-        playerId,
-        { betKey, amount, round: this.currentRound },
-        callback,
-        true
-      );
+      this["place-bet"](playerId, { betKey, amount, round: this.currentRound }, callback, true);
     }
   }
 
@@ -861,26 +805,19 @@ export class TournamentRoom {
 
     const playerBets = this.bets.get(playerId);
     if (!playerBets || playerBets.size === 0) {
-      console.log(
-        `ℹ️ [attemptPlaceBet] Jugador ${playerId} no tiene apuestas pendientes`
-      );
+      console.log(`ℹ️ [attemptPlaceBet] Jugador ${playerId} no tiene apuestas pendientes`);
       return;
     }
 
-    const totalBetAmount = Array.from(playerBets.values()).reduce(
-      (sum, amt) => sum + amt,
-      0
-    );
+    const totalBetAmount = Array.from(playerBets.values()).reduce((sum, amt) => sum + amt, 0);
 
     console.log(
-      `✅ [TORNEO VIRTUAL] Apuesta simulada CONFIRMADA para ${playerId}: ${totalBetAmount} fichas. Estado: ${this.gameState}`
+      `✅ [TORNEO VIRTUAL] Apuesta simulada CONFIRMADA para ${playerId}: ${totalBetAmount} fichas. Estado: ${this.gameState}`,
     );
   }
 
   async attemptDepositWinnings(playerId, amount) {
-    console.log(
-      `✅ [TORNEO VIRTUAL] Ganancias simuladas para ${playerId}: ${amount} fichas`
-    );
+    console.log(`✅ [TORNEO VIRTUAL] Ganancias simuladas para ${playerId}: ${amount} fichas`);
   }
 
   async logFailedTransaction(playerId, type, amount, error) {
@@ -894,14 +831,9 @@ export class TournamentRoom {
         status: "PENDING",
         createdAt: new Date(),
       });
-      console.warn(
-        `🚨 Transacción fallida registrada para ${playerId} (${type})`
-      );
+      console.warn(`🚨 Transacción fallida registrada para ${playerId} (${type})`);
     } catch (dbError) {
-      console.error(
-        `❌ Error guardando transacción fallida en DB:`,
-        dbError.message
-      );
+      console.error(`❌ Error guardando transacción fallida en DB:`, dbError.message);
     }
   }
 }

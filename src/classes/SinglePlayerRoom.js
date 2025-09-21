@@ -1,8 +1,9 @@
-// classes/SinglePlayerRoom.js
+// src/classes/SinglePlayerRoom.js
+
 import { RouletteEngine } from "./RouletteEngine.js";
 import { emitErrorByKey } from "../utils/errorHandler.js";
 import { BetLimits } from "./BetLimits.js";
-import prisma from "../prisma/index.js";
+import prisma from "../../prisma/index.js";
 import { CasinoApiService } from "../services/casinoApiService.js";
 
 const GAME_STATES = {
@@ -40,8 +41,7 @@ export class SinglePlayerRoom {
   }
 
   addPlayer(player, socket) {
-    if (this.players.size >= 1)
-      throw new Error("Esta sala es solo para un jugador.");
+    if (this.players.size >= 1) throw new Error("Esta sala es solo para un jugador.");
     player.socket = socket;
     player.socketId = socket.id;
     player.ip = socket.handshake.address || "unknown";
@@ -92,9 +92,7 @@ export class SinglePlayerRoom {
     this.stopCountdown();
 
     if (this.gameState === GAME_STATES.BETTING) {
-      const hasBets = Array.from(this.bets.values()).some(
-        (bets) => bets.size > 0
-      );
+      const hasBets = Array.from(this.bets.values()).some((bets) => bets.size > 0);
       if (!hasBets) {
         this.timeRemaining = 20;
         this.broadcast("game-state-update", {
@@ -114,10 +112,7 @@ export class SinglePlayerRoom {
 
       Array.from(this.players.keys()).forEach((playerId) => {
         this.attemptPlaceBet(playerId).catch((err) => {
-          console.error(
-            `❌ Error confirmando apuestas para ${playerId}:`,
-            err.message
-          );
+          console.error(`❌ Error confirmando apuestas para ${playerId}:`, err.message);
           this.logFailedTransaction(playerId, "BET", 0, err.message);
         });
       });
@@ -158,10 +153,7 @@ export class SinglePlayerRoom {
 
       playerBets.forEach((amount, betKey) => {
         totalBetAmount += amount;
-        const profitMultiplier = this.rouletteEngine.calculatePayout(
-          winningNumber,
-          betKey
-        );
+        const profitMultiplier = this.rouletteEngine.calculatePayout(winningNumber, betKey);
         const isWin = profitMultiplier > 0;
         let winnings = 0;
         let netWin = 0;
@@ -194,28 +186,17 @@ export class SinglePlayerRoom {
       }
 
       if (totalWinnings > 0) {
-        this.attemptDepositWinnings(
-          playerId,
-          totalWinnings,
-          player.ip || "unknown"
-        ).catch((err) => {
-          console.error(
-            `❌ Error depositando ganancias para ${playerId}:`,
-            err.message
-          );
-          this.logFailedTransaction(
-            playerId,
-            "WIN",
-            totalWinnings,
-            err.message
-          );
-        });
+        this.attemptDepositWinnings(playerId, totalWinnings, player.ip || "unknown").catch(
+          (err) => {
+            console.error(`❌ Error depositando ganancias para ${playerId}:`, err.message);
+            this.logFailedTransaction(playerId, "WIN", totalWinnings, err.message);
+          },
+        );
       }
 
       const balanceAfterPayout = player.balance;
       const totalNetResult = totalWinnings - totalBetAmount;
-      let resultStatus =
-        playerBets.size === 0 ? "no_bet" : totalWinnings > 0 ? "win" : "lose";
+      let resultStatus = playerBets.size === 0 ? "no_bet" : totalWinnings > 0 ? "win" : "lose";
 
       const payload = {
         state: "payout",
@@ -273,10 +254,7 @@ export class SinglePlayerRoom {
           console.log(`✅ Ronda guardada en DB para jugador ${playerId}`);
         })
         .catch((err) => {
-          console.error(
-            `❌ Error al guardar ronda para jugador ${playerId}:`,
-            err
-          );
+          console.error(`❌ Error al guardar ronda para jugador ${playerId}:`, err);
         });
     });
 
@@ -328,24 +306,14 @@ export class SinglePlayerRoom {
 
     let validation;
     if (isIncreaseOnly && playerBets.has(betKey)) {
-      const limitValidation = BetLimits.validateBetAmount(
-        betKey,
-        playerBets,
-        amount
-      );
+      const limitValidation = BetLimits.validateBetAmount(betKey, playerBets, amount);
       validation = {
         allowed: limitValidation.allowed,
-        reasonCode: limitValidation.allowed
-          ? undefined
-          : "BET_TYPE_LIMIT_EXCEEDED",
+        reasonCode: limitValidation.allowed ? undefined : "BET_TYPE_LIMIT_EXCEEDED",
         details: limitValidation,
       };
     } else {
-      validation = this.rouletteEngine.isBetAllowedDetailed(
-        betKey,
-        playerBets,
-        amount
-      );
+      validation = this.rouletteEngine.isBetAllowedDetailed(betKey, playerBets, amount);
     }
 
     if (!validation.allowed) {
@@ -408,10 +376,7 @@ export class SinglePlayerRoom {
 
     let totalRefund = 0;
     if (this.bets.has(playerId)) {
-      totalRefund = Array.from(this.bets.get(playerId).values()).reduce(
-        (sum, amt) => sum + amt,
-        0
-      );
+      totalRefund = Array.from(this.bets.get(playerId).values()).reduce((sum, amt) => sum + amt, 0);
       player.updateBalance(totalRefund);
       this.bets.delete(playerId);
     }
@@ -584,10 +549,7 @@ export class SinglePlayerRoom {
               betKey: key,
               amount: val,
             })),
-            totalBet: Array.from(playerBets.values()).reduce(
-              (sum, amt) => sum + amt,
-              0
-            ),
+            totalBet: Array.from(playerBets.values()).reduce((sum, amt) => sum + amt, 0),
           },
         });
       }
@@ -596,11 +558,7 @@ export class SinglePlayerRoom {
 
     const limitErrors = [];
     for (const [betKey, amount] of playerBets.entries()) {
-      const limitValidation = BetLimits.validateBetAmount(
-        betKey,
-        playerBets,
-        amount
-      );
+      const limitValidation = BetLimits.validateBetAmount(betKey, playerBets, amount);
       if (!limitValidation.allowed) {
         limitErrors.push({
           betKey,
@@ -620,10 +578,7 @@ export class SinglePlayerRoom {
               betKey: key,
               amount: val,
             })),
-            totalBet: Array.from(playerBets.values()).reduce(
-              (sum, amt) => sum + amt,
-              0
-            ),
+            totalBet: Array.from(playerBets.values()).reduce((sum, amt) => sum + amt, 0),
           },
         });
       }
@@ -653,15 +608,13 @@ export class SinglePlayerRoom {
   }
 
   peekQueue(count = 20) {
-    while (this.rouletteEngine.resultsQueue.length < count)
-      this.rouletteEngine.fillQueue();
+    while (this.rouletteEngine.resultsQueue.length < count) this.rouletteEngine.fillQueue();
     return this.rouletteEngine.resultsQueue.slice(0, count);
   }
 
   dequeueResult() {
     const result = this.rouletteEngine.getNextWinningNumber();
-    while (this.rouletteEngine.resultsQueue.length < 20)
-      this.rouletteEngine.fillQueue();
+    while (this.rouletteEngine.resultsQueue.length < 20) this.rouletteEngine.fillQueue();
     return result;
   }
 
@@ -674,19 +627,10 @@ export class SinglePlayerRoom {
     const playerBets = this.bets.get(playerId);
     if (!playerBets || playerBets.size === 0) return;
 
-    const totalBetAmount = Array.from(playerBets.values()).reduce(
-      (sum, amt) => sum + amt,
-      0
-    );
+    const totalBetAmount = Array.from(playerBets.values()).reduce((sum, amt) => sum + amt, 0);
 
     try {
-      await CasinoApiService.placeBet(
-        playerId,
-        totalBetAmount,
-        "round_total",
-        player.ip || "unknown",
-        player.currency || "ARS"
-      );
+      await CasinoApiService.placeBet(playerId, totalBetAmount, player.ip || "unknown");
       console.log(`✅ Apuesta confirmada para ${playerId}: ${totalBetAmount}`);
     } catch (error) {
       console.error(`❌ Falló placeBet para ${playerId}:`, error.message);
@@ -699,10 +643,7 @@ export class SinglePlayerRoom {
       await CasinoApiService.depositWinnings(playerId, amount, ip);
       console.log(`✅ Ganancias depositadas para ${playerId}: ${amount}`);
     } catch (error) {
-      console.error(
-        `❌ Falló depositWinnings para ${playerId}:`,
-        error.message
-      );
+      console.error(`❌ Falló depositWinnings para ${playerId}:`, error.message);
       throw error;
     }
   }
@@ -718,14 +659,9 @@ export class SinglePlayerRoom {
         status: "PENDING",
         createdAt: new Date(),
       });
-      console.warn(
-        `🚨 Transacción fallida registrada para ${playerId} (${type})`
-      );
+      console.warn(`🚨 Transacción fallida registrada para ${playerId} (${type})`);
     } catch (dbError) {
-      console.error(
-        `❌ Error guardando transacción fallida en DB:`,
-        dbError.message
-      );
+      console.error(`❌ Error guardando transacción fallida en DB:`, dbError.message);
     }
   }
 }

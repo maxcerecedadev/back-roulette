@@ -1,4 +1,5 @@
-// BetPayoutCalculator.js
+// src/classes/BetPayoutCalculator.js
+
 export class BetPayoutCalculator {
   /**
    * Calcula el multiplicador de pago de una apuesta según el tipo y el número ganador.
@@ -19,8 +20,7 @@ export class BetPayoutCalculator {
       const type = parts[2]; // red, black, even, odd, low, high
       if (type === "red") return redNumbers.has(winningNum) ? 1 : 0;
       if (type === "black") return blackNumbers.has(winningNum) ? 1 : 0;
-      if (type === "even")
-        return winningNum !== 0 && winningNum % 2 === 0 ? 1 : 0;
+      if (type === "even") return winningNum !== 0 && winningNum % 2 === 0 ? 1 : 0;
       if (type === "odd") return winningNum % 2 === 1 ? 1 : 0;
       if (type === "low") return winningNum >= 1 && winningNum <= 18 ? 1 : 0;
       if (type === "high") return winningNum >= 19 && winningNum <= 36 ? 1 : 0;
@@ -39,33 +39,23 @@ export class BetPayoutCalculator {
 
       // ------------------------ SPLIT
       case "split":
-        return numberParts.length === 2 && numberParts.includes(winningNum)
-          ? 17
-          : 0;
+        return numberParts.length === 2 && numberParts.includes(winningNum) ? 17 : 0;
 
       // ------------------------ STREET (3 números explícitos)
       case "street":
-        return numberParts.length === 3 && numberParts.includes(winningNum)
-          ? 11
-          : 0;
+        return numberParts.length === 3 && numberParts.includes(winningNum) ? 11 : 0;
 
       // ------------------------ CORNER (4 números explícitos)
       case "corner":
-        return numberParts.length === 4 && numberParts.includes(winningNum)
-          ? 8
-          : 0;
+        return numberParts.length === 4 && numberParts.includes(winningNum) ? 8 : 0;
 
       // ------------------------ LINE (6 números explícitos)
       case "line":
-        return numberParts.length === 6 && numberParts.includes(winningNum)
-          ? 5
-          : 0;
+        return numberParts.length === 6 && numberParts.includes(winningNum) ? 5 : 0;
 
       // ------------------------ TRIO (3 números: 0,1,2 o 0,2,3)
       case "trio":
-        return numberParts.length === 3 && numberParts.includes(winningNum)
-          ? 11
-          : 0;
+        return numberParts.length === 3 && numberParts.includes(winningNum) ? 11 : 0;
 
       // ------------------------ DOZEN
       case "dozen": {

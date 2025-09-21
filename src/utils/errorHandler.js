@@ -1,3 +1,4 @@
+// src/utils/errorHandler.js
 // utils/errorHandler.js
 import { v4 as uuidv4 } from "uuid";
 import { getErrorDefinition } from "../constants/errorMessages.js";
@@ -15,12 +16,7 @@ import { getErrorDefinition } from "../constants/errorMessages.js";
  * @param {Object} [options.state]
  */
 export const emitErrorByKey = (socket, errorCode, options = {}) => {
-  const {
-    betKey = null,
-    details = {},
-    customMessage = null,
-    state = null, // 👈 añadimos
-  } = options;
+  const { betKey = null, details = {}, customMessage = null, state = null } = options;
 
   const definition = getErrorDefinition(errorCode);
   const message = customMessage || definition.message;
@@ -38,12 +34,10 @@ export const emitErrorByKey = (socket, errorCode, options = {}) => {
 
   const logSuffix = betKey ? `(Apuesta: ${betKey})` : "";
   const detailsLog =
-    Object.keys(details).length > 0
-      ? `\nDetalles: ${JSON.stringify(details, null, 2)}`
-      : "";
+    Object.keys(details).length > 0 ? `\nDetalles: ${JSON.stringify(details, null, 2)}` : "";
 
   console.warn(
-    `[ERROR][${errorCode}][${errorId}] Jugador ${socket.id}: ${message} ${logSuffix}${detailsLog}`
+    `[ERROR][${errorCode}][${errorId}] Jugador ${socket.id}: ${message} ${logSuffix}${detailsLog}`,
   );
 
   socket.emit("bet-error", errorPayload);
@@ -67,12 +61,10 @@ export const emitError = (socket, type, message, options = {}) => {
 
   const logSuffix = betKey ? `(Apuesta: ${betKey})` : "";
   const detailsLog =
-    Object.keys(details).length > 0
-      ? `\nDetalles: ${JSON.stringify(details, null, 2)}`
-      : "";
+    Object.keys(details).length > 0 ? `\nDetalles: ${JSON.stringify(details, null, 2)}` : "";
 
   console.warn(
-    `[ERROR][${type}][${errorId}] Jugador ${socket.id}: ${message} ${logSuffix}${detailsLog}`
+    `[ERROR][${type}][${errorId}] Jugador ${socket.id}: ${message} ${logSuffix}${detailsLog}`,
   );
 
   socket.emit("bet-error", errorPayload);

@@ -1,12 +1,11 @@
-// classes/RouletteEngine.js
+// src/classes/RouletteEngine.js
+
 import { BetValidator } from "./BetValidator.js";
 import { BetPayoutCalculator } from "./BetPayoutCalculator.js";
 import { BetLimits } from "./BetLimits.js";
 
 export class RouletteEngine {
-  static RED_NUMBERS = new Set([
-    1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36,
-  ]);
+  static RED_NUMBERS = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
   static BLACK_NUMBERS = new Set([
     2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35,
   ]);
@@ -158,7 +157,7 @@ export class RouletteEngine {
       winningNumber,
       betKey,
       RouletteEngine.RED_NUMBERS,
-      RouletteEngine.BLACK_NUMBERS
+      RouletteEngine.BLACK_NUMBERS,
     );
   }
 
@@ -176,11 +175,7 @@ export class RouletteEngine {
   isBetAllowedDetailed(betKey, existingBets, newAmount = 0) {
     // 1. Validar límites de apuesta (si se pasa newAmount)
     if (newAmount > 0) {
-      const limitValidation = BetLimits.validateBetAmount(
-        betKey,
-        existingBets,
-        newAmount
-      );
+      const limitValidation = BetLimits.validateBetAmount(betKey, existingBets, newAmount);
       if (!limitValidation.allowed) {
         return {
           allowed: false,
@@ -191,10 +186,7 @@ export class RouletteEngine {
     }
 
     // 2. Validar combinaciones (conflictos, docenas/columnas, etc.)
-    const betValidation = BetValidator.isBetAllowedDetailed(
-      betKey,
-      existingBets
-    );
+    const betValidation = BetValidator.isBetAllowedDetailed(betKey, existingBets);
     if (!betValidation.allowed) {
       // Inferir reasonCode según contenido del mensaje
       let reasonCode = "BET_NOT_ALLOWED";
@@ -215,9 +207,7 @@ export class RouletteEngine {
       }
 
       // 👇 HUMANIZAMOS EL MENSAJE antes de enviarlo
-      const humanizedReason = this.constructor.humanizeBetKeyInMessage(
-        betValidation.reason
-      );
+      const humanizedReason = this.constructor.humanizeBetKeyInMessage(betValidation.reason);
 
       return {
         allowed: false,

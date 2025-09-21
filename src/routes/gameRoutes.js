@@ -3,7 +3,7 @@
 import { Router } from "express";
 import { adminAuth } from "../middleware/adminAuth.js";
 import * as gameManager from "../managers/gameManager.js";
-import prisma from "../prisma/index.js";
+import prisma from "../../prisma/index.js";
 import { v4 as uuidv4 } from "uuid";
 import axios from "axios";
 
@@ -17,10 +17,7 @@ router.get("/status", adminAuth, (req, res) => {
   const { roomId } = req.query;
   const status = gameManager.getStatus(roomId);
 
-  console.log(
-    `[ADMIN] 📋 Estado de sala ${roomId}:`,
-    JSON.stringify(status, null, 2)
-  );
+  console.log(`[ADMIN] 📋 Estado de sala ${roomId}:`, JSON.stringify(status, null, 2));
 
   if (!status) {
     return res.status(404).json({ error: "Sala no encontrada." });
@@ -53,14 +50,7 @@ router.delete("/:roomId", adminAuth, (req, res) => {
 // Rutas para jugador
 
 router.get("/rounds", async (req, res) => {
-  const {
-    playerId,
-    limit = 10,
-    page = 1,
-    startDate,
-    endDate,
-    result,
-  } = req.query;
+  const { playerId, limit = 10, page = 1, startDate, endDate, result } = req.query;
 
   if (!playerId) {
     return res.status(400).json({
@@ -152,25 +142,20 @@ router.post("/auth/validate-token", async (req, res) => {
           "Content-Type": "application/json",
         },
         timeout: 5000,
-      }
+      },
     );
 
     const { success, usuario, creditos } = response.data;
 
     if (!success) {
-      console.warn(
-        "❌ [AUTH] External API rejected token ending in:",
-        token.slice(-8)
-      );
+      console.warn("❌ [AUTH] External API rejected token ending in:", token.slice(-8));
       return res.status(401).json({ error: "Token inválido o expirado" });
     }
 
     const balance = parseFloat(creditos);
     if (isNaN(balance)) {
       console.error("❌ [AUTH] Invalid credit value received:", creditos);
-      return res
-        .status(500)
-        .json({ error: "Créditos inválidos del proveedor" });
+      return res.status(500).json({ error: "Créditos inválidos del proveedor" });
     }
 
     const userName = usuario;
@@ -212,9 +197,7 @@ router.post("/auth/validate-token", async (req, res) => {
     });
 
     if (error.response?.status === 401) {
-      console.warn(
-        "🔒 [AUTH] 401 Unauthorized — Token rejected by external service"
-      );
+      console.warn("🔒 [AUTH] 401 Unauthorized — Token rejected by external service");
       return res.status(401).json({ error: "Token inválido o expirado" });
     }
 
@@ -233,9 +216,7 @@ router.post("/auth/validate-token", async (req, res) => {
     }
 
     console.error("🚨 [AUTH] Unexpected validation error", error);
-    res
-      .status(500)
-      .json({ error: "Error interno del servidor al validar usuario" });
+    res.status(500).json({ error: "Error interno del servidor al validar usuario" });
   }
 });
 

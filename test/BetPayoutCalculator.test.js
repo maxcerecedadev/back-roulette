@@ -1,13 +1,11 @@
-import { describe, test } from "@jest/globals";
-import { BetPayoutCalculator } from "../classes/BetPayoutCalculator.js";
-import assert from "node:assert";
-
 // BetPayoutCalculator.test.js
 
+import { describe, test } from "@jest/globals";
+import { BetPayoutCalculator } from "../src/classes/BetPayoutCalculator.js";
+import assert from "node:assert";
+
 describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
-  const redNumbers = new Set([
-    1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36,
-  ]);
+  const redNumbers = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
   const blackNumbers = new Set([
     2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35,
   ]);
@@ -30,7 +28,7 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
           winningNumber(num),
           `straight_${num}`,
           redNumbers,
-          blackNumbers
+          blackNumbers,
         );
         assert.strictEqual(payout, 35, `straight_${num} should pay 35`);
       }
@@ -41,7 +39,7 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
         winningNumber(5),
         "straight_10",
         redNumbers,
-        blackNumbers
+        blackNumbers,
       );
       assert.strictEqual(payout, 0);
     });
@@ -115,7 +113,7 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
             winningNumber(win),
             betKey,
             redNumbers,
-            blackNumbers
+            blackNumbers,
           );
           assert.strictEqual(payout, 17, `${betKey} on ${win}`);
         }
@@ -126,7 +124,7 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
             winningNumber(other),
             betKey,
             redNumbers,
-            blackNumbers
+            blackNumbers,
           );
           assert.strictEqual(payout, 0, `${betKey} should lose on ${other}`);
         }
@@ -159,7 +157,7 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
             winningNumber(win),
             betKey,
             redNumbers,
-            blackNumbers
+            blackNumbers,
           );
           assert.strictEqual(payout, 11, `${betKey} on ${win}`);
         }
@@ -170,7 +168,7 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
             winningNumber(other),
             betKey,
             redNumbers,
-            blackNumbers
+            blackNumbers,
           );
           assert.strictEqual(payout, 0, `${betKey} should lose on ${other}`);
         }
@@ -213,7 +211,7 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
             winningNumber(win),
             betKey,
             redNumbers,
-            blackNumbers
+            blackNumbers,
           );
           assert.strictEqual(payout, 8, `${betKey} on ${win}`);
         }
@@ -224,7 +222,7 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
             winningNumber(other),
             betKey,
             redNumbers,
-            blackNumbers
+            blackNumbers,
           );
           assert.strictEqual(payout, 0, `${betKey} should lose on ${other}`);
         }
@@ -256,7 +254,7 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
             winningNumber(win),
             betKey,
             redNumbers,
-            blackNumbers
+            blackNumbers,
           );
           assert.strictEqual(payout, 5, `${betKey} on ${win}`);
         }
@@ -267,7 +265,7 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
             winningNumber(other),
             betKey,
             redNumbers,
-            blackNumbers
+            blackNumbers,
           );
           assert.strictEqual(payout, 0, `${betKey} should lose on ${other}`);
         }
@@ -290,7 +288,7 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
             winningNumber(num),
             key,
             redNumbers,
-            blackNumbers
+            blackNumbers,
           );
           assert.strictEqual(payout, 2, `${key} on ${num}`);
         }
@@ -300,7 +298,7 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
           winningNumber(outside),
           key,
           redNumbers,
-          blackNumbers
+          blackNumbers,
         );
         assert.strictEqual(payout, 0, `${key} should lose on ${outside}`);
       });
@@ -312,7 +310,7 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
           winningNumber(0),
           key,
           redNumbers,
-          blackNumbers
+          blackNumbers,
         );
         assert.strictEqual(payout, 0, `${key} should lose on 0`);
       }
@@ -334,19 +332,18 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
             winningNumber(num),
             `column_${col}`,
             redNumbers,
-            blackNumbers
+            blackNumbers,
           );
           assert.strictEqual(payout, 2, `column_${col} on ${num}`);
         }
 
-        const otherCol =
-          col === "1" ? columns[2] : col === "2" ? columns[3] : columns[1];
+        const otherCol = col === "1" ? columns[2] : col === "2" ? columns[3] : columns[1];
         for (const num of otherCol.slice(0, 3)) {
           const payout = BetPayoutCalculator.calculatePayout(
             winningNumber(num),
             `column_${col}`,
             redNumbers,
-            blackNumbers
+            blackNumbers,
           );
           assert.strictEqual(payout, 0, `column_${col} should lose on ${num}`);
         }
@@ -359,7 +356,7 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
           winningNumber(0),
           `column_${col}`,
           redNumbers,
-          blackNumbers
+          blackNumbers,
         );
         assert.strictEqual(payout, 0);
       }
@@ -378,18 +375,18 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
             winningNumber(num),
             `even_money_${color}`,
             redNumbers,
-            blackNumbers
+            blackNumbers,
           ),
-          1
+          1,
         );
         assert.strictEqual(
           BetPayoutCalculator.calculatePayout(
             winningNumber(num),
             `even_money_${opp}`,
             redNumbers,
-            blackNumbers
+            blackNumbers,
           ),
-          0
+          0,
         );
       }
     });
@@ -404,18 +401,18 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
             winningNumber(num),
             `even_money_${type}`,
             redNumbers,
-            blackNumbers
+            blackNumbers,
           ),
-          1
+          1,
         );
         assert.strictEqual(
           BetPayoutCalculator.calculatePayout(
             winningNumber(num),
             `even_money_${opp}`,
             redNumbers,
-            blackNumbers
+            blackNumbers,
           ),
-          0
+          0,
         );
       }
     });
@@ -427,18 +424,18 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
             winningNumber(num),
             "even_money_low",
             redNumbers,
-            blackNumbers
+            blackNumbers,
           ),
-          1
+          1,
         );
         assert.strictEqual(
           BetPayoutCalculator.calculatePayout(
             winningNumber(num),
             "even_money_high",
             redNumbers,
-            blackNumbers
+            blackNumbers,
           ),
-          0
+          0,
         );
       }
       for (let num = 19; num <= 36; num++) {
@@ -447,18 +444,18 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
             winningNumber(num),
             "even_money_high",
             redNumbers,
-            blackNumbers
+            blackNumbers,
           ),
-          1
+          1,
         );
         assert.strictEqual(
           BetPayoutCalculator.calculatePayout(
             winningNumber(num),
             "even_money_low",
             redNumbers,
-            blackNumbers
+            blackNumbers,
           ),
-          0
+          0,
         );
       }
     });
@@ -470,7 +467,7 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
           winningNumber(0),
           `even_money_${type}`,
           redNumbers,
-          blackNumbers
+          blackNumbers,
         );
         assert.strictEqual(payout, 0, `even_money_${type} should lose on 0`);
       }
@@ -485,7 +482,7 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
           winningNumber(num),
           "trio_0_1_2",
           redNumbers,
-          blackNumbers
+          blackNumbers,
         );
         assert.strictEqual(payout, 11);
       }
@@ -497,7 +494,7 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
           winningNumber(num),
           "trio_0_2_3",
           redNumbers,
-          blackNumbers
+          blackNumbers,
         );
         assert.strictEqual(payout, 11);
       }
@@ -509,18 +506,18 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
           winningNumber(4),
           "trio_0_1_2",
           redNumbers,
-          blackNumbers
+          blackNumbers,
         ),
-        0
+        0,
       );
       assert.strictEqual(
         BetPayoutCalculator.calculatePayout(
           winningNumber(1),
           "trio_0_2_3",
           redNumbers,
-          blackNumbers
+          blackNumbers,
         ),
-        0
+        0,
       );
     });
   });
@@ -533,7 +530,7 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
           winningNumber(num),
           "basket",
           redNumbers,
-          blackNumbers
+          blackNumbers,
         );
         assert.strictEqual(payout, 8);
       }
@@ -545,7 +542,7 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
           winningNumber(num),
           "basket",
           redNumbers,
-          blackNumbers
+          blackNumbers,
         );
         assert.strictEqual(payout, 0);
       }
@@ -559,7 +556,7 @@ describe("BetPayoutCalculator - Full Test Suite (European Roulette)", () => {
         winningNumber(17),
         "invalid_bet_999",
         redNumbers,
-        blackNumbers
+        blackNumbers,
       );
       assert.strictEqual(payout, 0);
     });

@@ -1,7 +1,7 @@
-// src/services/CasinoApiService.js
+// src/services/casinoApiService.js
 
 import axios from "axios";
-import prisma from "../prisma/index.js";
+import prisma from "../../prisma/index.js";
 import { v4 as uuidv4 } from "uuid";
 import { formatDateForExternalAPI } from "../utils/timezone.js";
 
@@ -38,7 +38,7 @@ export class CasinoApiService {
             "Content-Type": "application/json",
           },
           timeout: 5000,
-        }
+        },
       );
 
       const { status, message, balance_before, balance_after } = response.data;
@@ -48,7 +48,7 @@ export class CasinoApiService {
       }
 
       console.log(
-        `✅ [CASINO API] Apuesta exitosa: ${transactionId} para usuario ${user.name}. Nuevo saldo: ${balance_after}`
+        `✅ [CASINO API] Apuesta exitosa: ${transactionId} para usuario ${user.name}. Nuevo saldo: ${balance_after}`,
       );
 
       await prisma.externalTransaction.create({
@@ -71,14 +71,11 @@ export class CasinoApiService {
         externalResponse: response.data,
       };
     } catch (error) {
-      console.error(
-        `❌ [CASINO API] Error al realizar apuesta para usuario ${userId}:`,
-        {
-          message: error.message,
-          status: error.response?.status,
-          data: error.response?.data,
-        }
-      );
+      console.error(`❌ [CASINO API] Error al realizar apuesta para usuario ${userId}:`, {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+      });
 
       await prisma.externalTransaction.create({
         data: {
@@ -89,14 +86,10 @@ export class CasinoApiService {
           status: "FAILED",
           provider: "bets365vip",
           errorMessage: error.message,
-          rawResponse: error.response
-            ? JSON.stringify(error.response.data)
-            : null,
+          rawResponse: error.response ? JSON.stringify(error.response.data) : null,
         },
       });
-      throw new Error(
-        "Tu sesión ha expirado. Por favor, vuelve a iniciar sesión."
-      );
+      throw new Error("Tu sesión ha expirado. Por favor, vuelve a iniciar sesión.");
     }
   }
 
@@ -130,7 +123,7 @@ export class CasinoApiService {
             "Content-Type": "application/json",
           },
           timeout: 5000,
-        }
+        },
       );
 
       const { status, message, balance_before, balance_after } = response.data;
@@ -140,7 +133,7 @@ export class CasinoApiService {
       }
 
       console.log(
-        `✅ [CASINO API] Ganancias depositadas: ${transactionId} para usuario ${user.name}. Nuevo saldo: ${balance_after}`
+        `✅ [CASINO API] Ganancias depositadas: ${transactionId} para usuario ${user.name}. Nuevo saldo: ${balance_after}`,
       );
 
       await prisma.externalTransaction.create({
@@ -163,14 +156,11 @@ export class CasinoApiService {
         externalResponse: response.data,
       };
     } catch (error) {
-      console.error(
-        `❌ [CASINO API] Error al depositar ganancias para usuario ${userId}:`,
-        {
-          message: error.message,
-          status: error.response?.status,
-          data: error.response?.data,
-        }
-      );
+      console.error(`❌ [CASINO API] Error al depositar ganancias para usuario ${userId}:`, {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+      });
 
       await prisma.externalTransaction.create({
         data: {
@@ -181,15 +171,11 @@ export class CasinoApiService {
           status: "FAILED",
           provider: "bets365vip",
           errorMessage: error.message,
-          rawResponse: error.response
-            ? JSON.stringify(error.response.data)
-            : null,
+          rawResponse: error.response ? JSON.stringify(error.response.data) : null,
         },
       });
 
-      throw new Error(
-        "Error al depositar ganancias. Por favor, contacta soporte."
-      );
+      throw new Error("Error al depositar ganancias. Por favor, contacta soporte.");
     }
   }
 }

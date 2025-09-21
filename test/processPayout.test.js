@@ -1,7 +1,7 @@
 // test/processPayout.test.js
 
 import { describe, test, expect, beforeEach } from "@jest/globals";
-import { RouletteEngine } from "../classes/RouletteEngine.js";
+import { RouletteEngine } from "../src/classes/RouletteEngine.js";
 
 // --- MOCKS ---
 
@@ -55,10 +55,7 @@ describe("processPayout - Full Integration Test", () => {
       rouletteEngine,
 
       processPayout(winningNumber) {
-        console.log(
-          "[processPayout] Iniciando payout. Número ganador:",
-          winningNumber
-        );
+        console.log("[processPayout] Iniciando payout. Número ganador:", winningNumber);
 
         this.players.forEach((player, playerId) => {
           const playerBets = this.bets.get(playerId) || new Map();
@@ -69,10 +66,7 @@ describe("processPayout - Full Integration Test", () => {
           playerBets.forEach((amount, betKey) => {
             totalBetAmount += amount;
 
-            const profitMultiplier = this.rouletteEngine.calculatePayout(
-              winningNumber,
-              betKey
-            );
+            const profitMultiplier = this.rouletteEngine.calculatePayout(winningNumber, betKey);
 
             const isWin = profitMultiplier > 0;
             let winnings = 0;
@@ -107,11 +101,7 @@ describe("processPayout - Full Integration Test", () => {
           const totalNetResult = totalWinnings - totalBetAmount;
 
           const resultStatus =
-            playerBets.size === 0
-              ? "no_bet"
-              : totalNetResult > 0
-              ? "win"
-              : "lose";
+            playerBets.size === 0 ? "no_bet" : totalNetResult > 0 ? "win" : "lose";
 
           const payload = {
             state: "payout",

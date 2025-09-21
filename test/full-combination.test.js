@@ -1,7 +1,7 @@
 // test/full-combination.test.js
 
 import { describe, test, expect, beforeEach } from "@jest/globals";
-import { RouletteEngine } from "../classes/RouletteEngine.js";
+import { RouletteEngine } from "../src/classes/RouletteEngine.js";
 
 describe("processPayout - Full Combination Test (Max-like Bet)", () => {
   let game;
@@ -40,10 +40,7 @@ describe("processPayout - Full Combination Test (Max-like Bet)", () => {
 
           playerBets.forEach((amount, betKey) => {
             totalBetAmount += amount;
-            const profitMultiplier = this.rouletteEngine.calculatePayout(
-              winningNumber,
-              betKey
-            );
+            const profitMultiplier = this.rouletteEngine.calculatePayout(winningNumber, betKey);
             const isWin = profitMultiplier > 0;
             let winnings = 0;
             let netWin = 0;
@@ -77,11 +74,7 @@ describe("processPayout - Full Combination Test (Max-like Bet)", () => {
           const totalNetResult = totalWinnings - totalBetAmount;
 
           const resultStatus =
-            playerBets.size === 0
-              ? "no_bet"
-              : totalNetResult > 0
-              ? "win"
-              : "lose";
+            playerBets.size === 0 ? "no_bet" : totalNetResult > 0 ? "win" : "lose";
 
           const payload = {
             state: "payout",

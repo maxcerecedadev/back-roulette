@@ -31,11 +31,7 @@ export const tournamentHandler = (io, socket) => {
 
     const playerId = userId;
 
-    if (
-      !tournamentId ||
-      typeof tournamentId !== "string" ||
-      tournamentId.trim() === ""
-    ) {
+    if (!tournamentId || typeof tournamentId !== "string" || tournamentId.trim() === "") {
       console.error("❌ [tournamentHandler] tournamentId inválido o faltante");
       if (callback) {
         callback({ error: "tournamentId es requerido" });
@@ -48,21 +44,17 @@ export const tournamentHandler = (io, socket) => {
     const isCreator = isNewRoom;
 
     if (socket.player) {
-      console.log(
-        `♻️ [Torneo] Limpiando jugador anterior: ${socket.player.id}`
-      );
+      console.log(`♻️ [Torneo] Limpiando jugador anterior: ${socket.player.id}`);
 
       for (const [existingRoomId, existingRoom] of getActiveTournamentRooms()) {
         if (existingRoom.players.has(socket.player.id)) {
           console.log(
-            `🚪 Eliminando jugador ${socket.player.id} de sala anterior ${existingRoomId}`
+            `🚪 Eliminando jugador ${socket.player.id} de sala anterior ${existingRoomId}`,
           );
           existingRoom.removePlayer(socket.player.id);
           if (existingRoom.players.size === 0) {
             gameManager.removeRoom(existingRoomId);
-            console.log(
-              `🗑️ Sala anterior ${existingRoomId} eliminada (quedó vacía)`
-            );
+            console.log(`🗑️ Sala anterior ${existingRoomId} eliminada (quedó vacía)`);
           }
         }
       }
@@ -74,13 +66,13 @@ export const tournamentHandler = (io, socket) => {
     socket.player = player;
 
     console.log(
-      `🔎 [tournamentHandler] ANTES de unirse: buscando si jugador ${playerId} ya está en alguna sala...`
+      `🔎 [tournamentHandler] ANTES de unirse: buscando si jugador ${playerId} ya está en alguna sala...`,
     );
 
     for (const [existingRoomId, existingRoom] of getActiveTournamentRooms()) {
       if (existingRoom.players.has(playerId)) {
         console.warn(
-          `⚠️ [tournamentHandler] ¡Jugador ${playerId} YA ESTÁ en sala ${existingRoomId}!`
+          `⚠️ [tournamentHandler] ¡Jugador ${playerId} YA ESTÁ en sala ${existingRoomId}!`,
         );
         existingRoom.removePlayer(playerId);
       }
@@ -90,13 +82,13 @@ export const tournamentHandler = (io, socket) => {
       const room = gameManager.getOrCreateTournamentRoom(
         roomId,
         io,
-        isCreator ? userId : undefined
+        isCreator ? userId : undefined,
       );
 
       console.log(
         `🎯 [Torneo] Jugador ${userName} (${userId}) ${
           isCreator ? "CREÓ" : "SE UNIÓ A"
-        } la sala ${roomId}`
+        } la sala ${roomId}`,
       );
 
       socket.join(roomId);
@@ -104,9 +96,7 @@ export const tournamentHandler = (io, socket) => {
 
       room.addPlayer(player, socket);
 
-      console.log(
-        `👥 [Torneo] Sala ${roomId} ahora tiene ${room.players.size}/3 jugadores`
-      );
+      console.log(`👥 [Torneo] Sala ${roomId} ahora tiene ${room.players.size}/3 jugadores`);
 
       if (callback) {
         callback({
@@ -116,10 +106,7 @@ export const tournamentHandler = (io, socket) => {
         });
       }
     } catch (error) {
-      console.error(
-        `❌ [Torneo] Error al unirse (${userName}):`,
-        error.message
-      );
+      console.error(`❌ [Torneo] Error al unirse (${userName}):`, error.message);
       if (callback) {
         callback({ error: error.message });
       }
@@ -142,30 +129,19 @@ export const tournamentHandler = (io, socket) => {
     try {
       room.startTournament(creatorId);
 
+      console.log(`✅ [Torneo] ¡Torneo INICIADO en sala ${roomId} por creador ${creatorId}!`);
       console.log(
-        `✅ [Torneo] ¡Torneo INICIADO en sala ${roomId} por creador ${creatorId}!`
-      );
-      console.log(
-        `🎲 [Torneo] Estado: ${room.players.size} jugadores listos, ronda ${room.currentRound}`
+        `🎲 [Torneo] Estado: ${room.players.size} jugadores listos, ronda ${room.currentRound}`,
       );
 
       socket.emit("tournament-started", { round: room.currentRound });
     } catch (error) {
       socket.emit("error", { message: error.message });
-      console.error(
-        `❌ [Torneo] Error iniciando torneo en ${roomId}:`,
-        error.message
-      );
+      console.error(`❌ [Torneo] Error iniciando torneo en ${roomId}:`, error.message);
     }
   });
 
-  const betEvents = [
-    "place-bet",
-    "clear-bets",
-    "undo-bet",
-    "repeat-bet",
-    "double-bet",
-  ];
+  const betEvents = ["place-bet", "clear-bets", "undo-bet", "repeat-bet", "double-bet"];
 
   betEvents.forEach((event) => {
     socket.on(`tournament-${event}`, (data) => {
@@ -176,9 +152,7 @@ export const tournamentHandler = (io, socket) => {
       if (!room || !playerId) return;
 
       if (typeof room[event] === "function") {
-        console.log(
-          `🎰 [Torneo] Jugador ${playerId} ejecutó ${event} en sala ${roomId}`
-        );
+        console.log(`🎰 [Torneo] Jugador ${playerId} ejecutó ${event} en sala ${roomId}`);
         room[event](playerId, data);
       }
     });
@@ -194,9 +168,7 @@ export const tournamentHandler = (io, socket) => {
   });
 
   socket.on("leave-room", ({ roomId, userId }) => {
-    console.log(
-      `🚪 [tournamentHandler] Jugador ${userId} solicitó salir de sala ${roomId}`
-    );
+    console.log(`🚪 [tournamentHandler] Jugador ${userId} solicitó salir de sala ${roomId}`);
 
     if (!roomId || !userId) {
       console.warn("⚠️ [tournamentHandler] leave-room: faltan roomId o userId");
@@ -206,17 +178,13 @@ export const tournamentHandler = (io, socket) => {
 
     const room = gameManager.getRoom(roomId);
     if (!room) {
-      console.warn(
-        `⚠️ [tournamentHandler] Sala ${roomId} no encontrada al salir`
-      );
+      console.warn(`⚠️ [tournamentHandler] Sala ${roomId} no encontrada al salir`);
       socket.emit("error", { message: "Sala no encontrada." });
       return;
     }
 
     if (room.isStarted) {
-      console.warn(
-        `⚠️ [tournamentHandler] Jugador ${userId} intentó salir de torneo INICIADO`
-      );
+      console.warn(`⚠️ [tournamentHandler] Jugador ${userId} intentó salir de torneo INICIADO`);
       socket.emit("error", {
         message: "No puedes salir: el torneo ya ha comenzado.",
       });
@@ -225,16 +193,12 @@ export const tournamentHandler = (io, socket) => {
 
     if (room.players.has(userId)) {
       room.removePlayer(userId);
-      console.log(
-        `✅ [tournamentHandler] Jugador ${userId} eliminado de sala ${roomId}`
-      );
+      console.log(`✅ [tournamentHandler] Jugador ${userId} eliminado de sala ${roomId}`);
     }
 
     if (socket.player && socket.player.id === userId) {
       delete socket.player;
-      console.log(
-        `♻️ [tournamentHandler] socket.player limpiado para ${userId}`
-      );
+      console.log(`♻️ [tournamentHandler] socket.player limpiado para ${userId}`);
     }
     delete socket.roomId;
     console.log(`♻️ [tournamentHandler] socket.roomId limpiado`);
@@ -243,9 +207,7 @@ export const tournamentHandler = (io, socket) => {
 
     if (room.players.size === 0) {
       gameManager.removeRoom(roomId);
-      console.log(
-        `🗑️ [tournamentHandler] Sala ${roomId} eliminada por estar vacía`
-      );
+      console.log(`🗑️ [tournamentHandler] Sala ${roomId} eliminada por estar vacía`);
     }
   });
 
@@ -257,20 +219,16 @@ export const tournamentHandler = (io, socket) => {
       if (room.players.has(player.id)) {
         const playerName = player.name || "Desconocido";
         console.log(
-          `🚪 [Torneo] Jugador ${playerName} (${player.id}) se DESCONECTÓ de sala ${roomId}`
+          `🚪 [Torneo] Jugador ${playerName} (${player.id}) se DESCONECTÓ de sala ${roomId}`,
         );
 
         room.removePlayer(player.id);
 
         delete socket.player;
         delete socket.roomId;
-        console.log(
-          `♻️ [Torneo] Referencias de socket limpiadas tras desconexión`
-        );
+        console.log(`♻️ [Torneo] Referencias de socket limpiadas tras desconexión`);
 
-        console.log(
-          `👥 [Torneo] Sala ${roomId} ahora tiene ${room.players.size} jugadores`
-        );
+        console.log(`👥 [Torneo] Sala ${roomId} ahora tiene ${room.players.size} jugadores`);
 
         if (room.players.size === 0) {
           gameManager.removeRoom(roomId);

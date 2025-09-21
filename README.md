@@ -49,24 +49,9 @@ Servidor backend para la aplicación de ruleta, construido con Node.js, Express 
 
 ```
 backend
-├─ classes
-│  ├─ BetLimits.js
-│  ├─ BetPayoutCalculator.js
-│  ├─ BetValidator.js
-│  ├─ Player.js
-│  ├─ RouletteEngine.js
-│  ├─ SinglePlayerRoom.js
-│  └─ TournamentRoom.js
-├─ constants
-│  └─ errorMessages.js
 ├─ Diagram.md
 ├─ eslint.config.js
-├─ handlers
-│  ├─ singlePlayerHandler.js
-│  └─ tournamentHandler.js
-├─ jsconfig.json
-├─ middleware
-│  └─ adminAuth.js
+├─ nodemon.json
 ├─ package-lock.json
 ├─ package.json
 ├─ prisma
@@ -81,18 +66,35 @@ backend
 │  │  └─ migration_lock.toml
 │  └─ schema.prisma
 ├─ README.md
-├─ routes
-│  └─ gameRoutes.js
-├─ server.js
-├─ services
-│  ├─ casinoApiService.js
-│  └─ gameManager.js
-├─ test
-│  ├─ BetPayoutCalculator.test.js
-│  ├─ full-combination.test.js
-│  └─ processPayout.test.js
-└─ utils
-   ├─ errorHandler.js
-   └─ timezone.js
+├─ src
+│  ├─ classes
+│  │  ├─ BetLimits.js
+│  │  ├─ BetPayoutCalculator.js
+│  │  ├─ BetValidator.js
+│  │  ├─ Player.js
+│  │  ├─ RouletteEngine.js
+│  │  ├─ SinglePlayerRoom.js
+│  │  └─ TournamentRoom.js
+│  ├─ constants
+│  │  └─ errorMessages.js
+│  ├─ handlers
+│  │  ├─ singlePlayerHandler.js
+│  │  └─ tournamentHandler.js
+│  ├─ managers
+│  │  └─ gameManager.js
+│  ├─ middleware
+│  │  └─ adminAuth.js
+│  ├─ routes
+│  │  └─ gameRoutes.js
+│  ├─ server.js
+│  ├─ services
+│  │  └─ casinoApiService.js
+│  └─ utils
+│     ├─ errorHandler.js
+│     └─ timezone.js
+└─ test
+   ├─ BetPayoutCalculator.test.js
+   ├─ full-combination.test.js
+   └─ processPayout.test.js
 
 ```

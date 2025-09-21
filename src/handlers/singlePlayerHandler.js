@@ -23,9 +23,7 @@ export const singlePlayerHandler = (io, socket) => {
     const { userId, userName, balance } = data;
 
     if (socket.player) {
-      console.log(
-        `♻️ Reemplazando jugador anterior: ${socket.player.id} → ${userId}`
-      );
+      console.log(`♻️ Reemplazando jugador anterior: ${socket.player.id} → ${userId}`);
       delete socket.player;
     }
 
@@ -64,9 +62,7 @@ export const singlePlayerHandler = (io, socket) => {
 
     const playerId = getPlayerId();
     if (!playerId) {
-      console.warn(
-        `⚠️ Intento de apuesta sin jugador autenticado desde socket: ${socket.id}`
-      );
+      console.warn(`⚠️ Intento de apuesta sin jugador autenticado desde socket: ${socket.id}`);
       socket.emit("error", { message: "Jugador no autenticado." });
       return;
     }

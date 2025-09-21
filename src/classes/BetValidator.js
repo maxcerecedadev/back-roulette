@@ -1,4 +1,4 @@
-// classes/BetValidator.js
+// src/classes/BetValidator.js
 
 export class BetValidator {
   static MAX_COVERED_NUMBERS = 27;
@@ -49,37 +49,24 @@ export class BetValidator {
     ["column_3", new Set([3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36])],
     [
       "even_money_red",
-      new Set([
-        1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36,
-      ]),
+      new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]),
     ],
     [
       "even_money_black",
-      new Set([
-        2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35,
-      ]),
+      new Set([2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35]),
     ],
     [
       "even_money_even",
-      new Set([
-        2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36,
-      ]),
+      new Set([2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36]),
     ],
     [
       "even_money_odd",
-      new Set([
-        1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35,
-      ]),
+      new Set([1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35]),
     ],
-    [
-      "even_money_low",
-      new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]),
-    ],
+    ["even_money_low", new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18])],
     [
       "even_money_high",
-      new Set([
-        19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36,
-      ]),
+      new Set([19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36]),
     ],
   ]);
 
@@ -124,9 +111,7 @@ export class BetValidator {
 
     const betKeys = Array.from(allBets.keys());
 
-    const hasAllDozens = this.DOZEN_BET_KEYS.every((key) =>
-      betKeys.includes(key)
-    );
+    const hasAllDozens = this.DOZEN_BET_KEYS.every((key) => betKeys.includes(key));
     if (hasAllDozens) {
       return {
         hasNonsensicalCombination: true,
@@ -134,9 +119,7 @@ export class BetValidator {
       };
     }
 
-    const hasAllColumns = this.COLUMN_BET_KEYS.every((key) =>
-      betKeys.includes(key)
-    );
+    const hasAllColumns = this.COLUMN_BET_KEYS.every((key) => betKeys.includes(key));
     if (hasAllColumns) {
       return {
         hasNonsensicalCombination: true,
@@ -144,43 +127,29 @@ export class BetValidator {
       };
     }
 
-    if (
-      betKeys.includes("even_money_low") &&
-      betKeys.includes("even_money_high")
-    ) {
+    if (betKeys.includes("even_money_low") && betKeys.includes("even_money_high")) {
       return {
         hasNonsensicalCombination: true,
-        reason:
-          "No puedes apostar a ambos rangos (1-18 y 19-36) simultáneamente",
+        reason: "No puedes apostar a ambos rangos (1-18 y 19-36) simultáneamente",
       };
     }
 
-    if (
-      betKeys.includes("even_money_even") &&
-      betKeys.includes("even_money_odd")
-    ) {
+    if (betKeys.includes("even_money_even") && betKeys.includes("even_money_odd")) {
       return {
         hasNonsensicalCombination: true,
         reason: "No puedes apostar a par e impar simultáneamente",
       };
     }
 
-    if (
-      betKeys.includes("even_money_red") &&
-      betKeys.includes("even_money_black")
-    ) {
+    if (betKeys.includes("even_money_red") && betKeys.includes("even_money_black")) {
       return {
         hasNonsensicalCombination: true,
         reason: "No puedes apostar a rojo y negro simultáneamente",
       };
     }
 
-    const dozenCount = this.DOZEN_BET_KEYS.filter((key) =>
-      betKeys.includes(key)
-    ).length;
-    const columnCount = this.COLUMN_BET_KEYS.filter((key) =>
-      betKeys.includes(key)
-    ).length;
+    const dozenCount = this.DOZEN_BET_KEYS.filter((key) => betKeys.includes(key)).length;
+    const columnCount = this.COLUMN_BET_KEYS.filter((key) => betKeys.includes(key)).length;
 
     if (
       dozenCount >= 2 &&
@@ -189,8 +158,7 @@ export class BetValidator {
     ) {
       return {
         hasNonsensicalCombination: true,
-        reason:
-          "Esta combinación de docenas y columnas cubre demasiados números",
+        reason: "Esta combinación de docenas y columnas cubre demasiados números",
       };
     }
 
@@ -233,17 +201,10 @@ export class BetValidator {
     // 2. Validar combinación docenas/columnas
     const isNewBetColumn = this.COLUMN_BET_KEYS.includes(newBetKey);
     const isNewBetDozen = this.DOZEN_BET_KEYS.includes(newBetKey);
-    const hasExistingColumnBet = this.COLUMN_BET_KEYS.some((key) =>
-      existingBets.has(key)
-    );
-    const hasExistingDozenBet = this.DOZEN_BET_KEYS.some((key) =>
-      existingBets.has(key)
-    );
+    const hasExistingColumnBet = this.COLUMN_BET_KEYS.some((key) => existingBets.has(key));
+    const hasExistingDozenBet = this.DOZEN_BET_KEYS.some((key) => existingBets.has(key));
 
-    if (
-      (isNewBetColumn && hasExistingDozenBet) ||
-      (isNewBetDozen && hasExistingColumnBet)
-    ) {
+    if ((isNewBetColumn && hasExistingDozenBet) || (isNewBetDozen && hasExistingColumnBet)) {
       return {
         allowed: false,
         reason: "No puedes combinar apuestas de docenas y columnas",
@@ -251,10 +212,7 @@ export class BetValidator {
     }
 
     // 3. Validar combinaciones absurdas
-    const nonsensicalCheck = this.detectNonsensicalCombinations(
-      newBetKey,
-      existingBets
-    );
+    const nonsensicalCheck = this.detectNonsensicalCombinations(newBetKey, existingBets);
     if (nonsensicalCheck.hasNonsensicalCombination) {
       return { allowed: false, reason: nonsensicalCheck.reason };
     }

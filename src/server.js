@@ -1,12 +1,14 @@
+// src/server.js
+
 import express from "express";
 import cors from "cors";
 import { createServer } from "node:http";
 import { Server as SocketServer } from "socket.io";
 import gameRoutes from "./routes/gameRoutes.js";
-import prisma from "./prisma/index.js";
 import { config } from "dotenv";
 import { singlePlayerHandler } from "./handlers/singlePlayerHandler.js";
 import { tournamentHandler } from "./handlers/tournamentHandler.js";
+import prisma from "../prisma/index.js";
 
 config();
 

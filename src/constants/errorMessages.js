@@ -1,4 +1,4 @@
-// constants/errorMessages.js
+// src/constants/errorMessages.js
 
 /**
  * Catálogo centralizado de errores.
