@@ -45,13 +45,54 @@ Servidor backend para la aplicación de ruleta, construido con Node.js, Express 
 
 ## 📂 Estructura del proyecto
 
-```
-roulette-back/
-├── server.js        # Punto de entrada del servidor
-├── routes/          # Endpoints de la API
-├── sockets/         # Lógica de comunicación en tiempo real
-├── tests/           # Pruebas con Jest
-└── package.json
-```
-
 ---
+
+```
+backend
+├─ classes
+│  ├─ BetLimits.js
+│  ├─ BetPayoutCalculator.js
+│  ├─ BetValidator.js
+│  ├─ Player.js
+│  ├─ RouletteEngine.js
+│  ├─ SinglePlayerRoom.js
+│  └─ TournamentRoom.js
+├─ constants
+│  └─ errorMessages.js
+├─ Diagram.md
+├─ eslint.config.js
+├─ handlers
+│  ├─ singlePlayerHandler.js
+│  └─ tournamentHandler.js
+├─ jsconfig.json
+├─ middleware
+│  └─ adminAuth.js
+├─ package-lock.json
+├─ package.json
+├─ prisma
+│  ├─ index.js
+│  ├─ migrations
+│  │  ├─ 20250915055429_init
+│  │  │  └─ migration.sql
+│  │  ├─ 20250916000932_add_failed_transaction_table
+│  │  │  └─ migration.sql
+│  │  ├─ 20250919030444_create_tournament_tables
+│  │  │  └─ migration.sql
+│  │  └─ migration_lock.toml
+│  └─ schema.prisma
+├─ README.md
+├─ routes
+│  └─ gameRoutes.js
+├─ server.js
+├─ services
+│  ├─ casinoApiService.js
+│  └─ gameManager.js
+├─ test
+│  ├─ BetPayoutCalculator.test.js
+│  ├─ full-combination.test.js
+│  └─ processPayout.test.js
+└─ utils
+   ├─ errorHandler.js
+   └─ timezone.js
+
+```

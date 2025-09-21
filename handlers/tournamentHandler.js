@@ -1,12 +1,29 @@
 // src/handlers/tournamentHandler.js
 
 import { Player } from "../classes/Player.js";
-import * as gameManager from "../services/gameManager.js";
+import * as gameManager from "../managers/gameManager.js";
+import { TournamentRoom } from "../classes/TournamentRoom.js";
 
 export const tournamentHandler = (io, socket) => {
   const getPlayerId = () => {
     if (socket.player && socket.player.id) return socket.player.id;
     return undefined;
+  };
+
+  /**
+   * Helper: Obtiene todas las salas de TORNEO activas.
+   * @returns {Array<[string, TournamentRoom]>} Array de [roomId, room]
+   */
+
+  const getActiveTournamentRooms = () => {
+    const rooms = [];
+    for (const roomId of gameManager.getRoomsForAdmin().tournament) {
+      const room = gameManager.getRoom(roomId);
+      if (room instanceof TournamentRoom) {
+        rooms.push([roomId, room]);
+      }
+    }
+    return rooms;
   };
 
   socket.on("tournament-join", (data, callback) => {
@@ -30,15 +47,12 @@ export const tournamentHandler = (io, socket) => {
     const isNewRoom = !gameManager.getRoom(roomId);
     const isCreator = isNewRoom;
 
-    // 🔁 LIMPIAR JUGADOR Y SALA ANTERIOR si existe
     if (socket.player) {
       console.log(
         `♻️ [Torneo] Limpiando jugador anterior: ${socket.player.id}`
       );
-      for (const [
-        existingRoomId,
-        existingRoom,
-      ] of gameManager.tournamentRooms.entries()) {
+
+      for (const [existingRoomId, existingRoom] of getActiveTournamentRooms()) {
         if (existingRoom.players.has(socket.player.id)) {
           console.log(
             `🚪 Eliminando jugador ${socket.player.id} de sala anterior ${existingRoomId}`
@@ -63,10 +77,7 @@ export const tournamentHandler = (io, socket) => {
       `🔎 [tournamentHandler] ANTES de unirse: buscando si jugador ${playerId} ya está en alguna sala...`
     );
 
-    for (const [
-      existingRoomId,
-      existingRoom,
-    ] of gameManager.tournamentRooms.entries()) {
+    for (const [existingRoomId, existingRoom] of getActiveTournamentRooms()) {
       if (existingRoom.players.has(playerId)) {
         console.warn(
           `⚠️ [tournamentHandler] ¡Jugador ${playerId} YA ESTÁ en sala ${existingRoomId}!`
@@ -88,11 +99,9 @@ export const tournamentHandler = (io, socket) => {
         } la sala ${roomId}`
       );
 
-      // 👇 ¡PRIMERO unir el socket a la sala!
       socket.join(roomId);
       socket.roomId = roomId;
 
-      // 👇 LUEGO agregar el jugador (emite broadcast a la sala)
       room.addPlayer(player, socket);
 
       console.log(
@@ -133,7 +142,6 @@ export const tournamentHandler = (io, socket) => {
     try {
       room.startTournament(creatorId);
 
-      // 👇 Log claro de inicio
       console.log(
         `✅ [Torneo] ¡Torneo INICIADO en sala ${roomId} por creador ${creatorId}!`
       );
@@ -158,6 +166,7 @@ export const tournamentHandler = (io, socket) => {
     "repeat-bet",
     "double-bet",
   ];
+
   betEvents.forEach((event) => {
     socket.on(`tournament-${event}`, (data) => {
       console.log(`📥 [BACKEND] Recibido evento: tournament-${event}`, data);
@@ -244,7 +253,7 @@ export const tournamentHandler = (io, socket) => {
     const player = socket.player;
     if (!player) return;
 
-    for (const [roomId, room] of gameManager.tournamentRooms.entries()) {
+    for (const [roomId, room] of getActiveTournamentRooms()) {
       if (room.players.has(player.id)) {
         const playerName = player.name || "Desconocido";
         console.log(

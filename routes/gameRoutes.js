@@ -2,7 +2,7 @@
 
 import { Router } from "express";
 import { adminAuth } from "../middleware/adminAuth.js";
-import * as gameManager from "../services/gameManager.js";
+import * as gameManager from "../managers/gameManager.js";
 import prisma from "../prisma/index.js";
 import { v4 as uuidv4 } from "uuid";
 import axios from "axios";

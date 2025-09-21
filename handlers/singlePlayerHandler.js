@@ -1,12 +1,13 @@
 // src/handlers/singlePlayerHandler.js
 
 import { Player } from "../classes/Player.js";
-import * as gameManager from "../services/gameManager.js";
+import * as gameManager from "../managers/gameManager.js";
 
 /**
  * @param {object} socket - La instancia del socket del cliente que se ha conectado.
  * @param {object} io - La instancia completa del servidor de Socket.IO, para emitir eventos a todos los clientes.
  */
+
 export const singlePlayerHandler = (io, socket) => {
   console.log(`✅ [singlePlayerHandler] Adjuntado al socket: ${socket.id}`);
 
