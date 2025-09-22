@@ -7,6 +7,7 @@ export class Player {
    * @param {number} balance - El saldo inicial del usuario.
    * @param {boolean} [isCreator=false] - Indica si este jugador es el creador del torneo.
    */
+
   constructor(id, name, balance, isCreator = false) {
     this.id = id;
     this.name = name;

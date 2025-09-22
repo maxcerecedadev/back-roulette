@@ -11,8 +11,6 @@ const router = Router();
 
 const API_BASE_URL = process.env.CASINO_API_BASE_URL;
 
-// Rutas para admin
-
 router.get("/status", adminAuth, (req, res) => {
   const { roomId } = req.query;
   const status = gameManager.getStatus(roomId);
@@ -46,8 +44,6 @@ router.delete("/:roomId", adminAuth, (req, res) => {
 
   res.json({ message: `Sala ${roomId} eliminada con éxito.` });
 });
-
-// Rutas para jugador
 
 router.get("/rounds", async (req, res) => {
   const { playerId, limit = 10, page = 1, startDate, endDate, result } = req.query;
