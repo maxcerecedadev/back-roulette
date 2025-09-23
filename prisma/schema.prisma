@@ -82,12 +82,16 @@ model FailedTransaction {
 
 model Tournament {
   id            String   @id @default(uuid())
+  code          String   @unique
+  maxPlayers    Int      @default(3)
   rounds        Int      
   currentRound  Int
   status        String   
   results       Json?    
   createdAt     DateTime @default(now())
   tournamentRounds Round[] @relation(name: "TournamentRounds") 
+
+  @@index([code]) 
 }
 
 model Round {
@@ -99,4 +103,14 @@ model Round {
   winningColor   String?
   playerResults  Json?  
   createdAt      DateTime @default(now())
+}
+
+model DailyTournamentCounter {
+  id        Int    @id @default(autoincrement())
+  dateKey   String @unique 
+  count     Int    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("daily_tournament_counters")
 }

@@ -216,44 +216,50 @@ router.post("/auth/validate-token", async (req, res) => {
   }
 });
 
-let dailyCounters = {};
-
 router.post("/tournament/create", async (req, res) => {
   const { maxPlayers = 3, maxRounds = 10 } = req.body;
 
   try {
-    // 1. Obtener fecha actual en formato YYMMDD
     const now = new Date();
-    const year = now.getFullYear().toString().slice(-2); // "25"
-    const month = String(now.getMonth() + 1).padStart(2, "0"); // "04"
-    const day = String(now.getDate()).padStart(2, "0"); // "05"
-    const dateKey = `${year}${month}${day}`; // "250405"
+    const year = now.getFullYear().toString().slice(-2); 
+    const month = String(now.getMonth() + 1).padStart(2, "0"); 
+    const day = String(now.getDate()).padStart(2, "0"); 
+    const dateKey = `${year}${month}${day}`; 
 
-    // 2. Incrementar contador para hoy
-    if (!dailyCounters[dateKey]) {
-      dailyCounters[dateKey] = 1;
-    } else {
-      dailyCounters[dateKey]++;
-    }
+    let counter = await prisma.dailyTournamentCounter.upsert({
+      where: { dateKey },
+      update: {
+        count: {
+          increment: 1,
+        },
+      },
+      create: {
+        dateKey,
+        count: 1,
+      },
+    });
 
-    const sequence = String(dailyCounters[dateKey]).padStart(3, "0"); // "001", "002", ...
+    const sequence = String(counter.count).padStart(3, "0"); 
+    const tournamentCode = `T_${dateKey}_${sequence}`;
 
-    // 3. Formar el ID legible
-    const tournamentId = `T_${dateKey}_${sequence}`; // "T_250405_001"
+    const tournament = await prisma.tournament.create({
+      data: {
+        code: tournamentCode, 
+        rounds: maxRounds,    
+        currentRound: 0,
+        maxPlayers,
+        status: "WAITING",
+        results: [],
+        createdAt: now,
+      },
+    });
 
-    // Opcional: Guardar en DB
-    // await prisma.tournament.create({
-    //   data: {
-    //     id: tournamentId,
-    //     maxPlayers,
-    //     maxRounds,
-    //     createdAt: now,
-    //   },
-    // });
+    console.log(`✅ Torneo creado: ${tournamentCode} (ID: ${tournament.id})`);
 
     res.json({
       success: true,
-      tournamentId,
+      tournamentId: tournament.id,      
+      tournamentCode,                   
       maxPlayers,
       maxRounds,
       message: "Torneo creado exitosamente",

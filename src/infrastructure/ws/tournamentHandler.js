@@ -1,5 +1,6 @@
 // src/infrastructure/ws/tournamentHandler.js
 
+import prisma from "#prisma";
 import { Player } from "#domain/entities/Player.js";
 import * as gameManager from "#app/managers/gameManager.js";
 import { TournamentRoom } from "#domain/entities/TournamentRoom.js";
@@ -26,20 +27,40 @@ export const tournamentHandler = (io, socket) => {
     return rooms;
   };
 
-  socket.on("tournament-join", (data, callback) => {
-    const { userId, userName, balance, tournamentId } = data;
+  socket.on("tournament-join", async (data, callback) => { 
+  const { userId, userName, balance, tournamentId: tournamentIdentifier } = data;
 
-    const playerId = userId;
+  const playerId = userId;
 
-    if (!tournamentId || typeof tournamentId !== "string" || tournamentId.trim() === "") {
-      console.error("❌ [tournamentHandler] tournamentId inválido o faltante");
-      if (callback) {
-        callback({ error: "tournamentId es requerido" });
+  if (!tournamentIdentifier || typeof tournamentIdentifier !== "string" || tournamentIdentifier.trim() === "") {
+    console.error("❌ [tournamentHandler] tournamentId inválido o faltante");
+    if (callback) {
+      callback({ error: "tournamentId es requerido" });
+    }
+    return;
+  }
+
+  try {
+    let roomId;
+    if (tournamentIdentifier.startsWith("T_") && tournamentIdentifier.includes("_")) {
+      const tournament = await prisma.tournament.findUnique({
+        where: { code: tournamentIdentifier },
+      });
+
+      if (!tournament) {
+        console.error(`❌ Torneo no encontrado por código: ${tournamentIdentifier}`);
+        if (callback) {
+          callback({ error: "Torneo no encontrado" });
+        }
+        return;
       }
-      return;
+
+      roomId = tournament.id; 
+      console.log(`✅ [tournamentHandler] Código legible "${tournamentIdentifier}" resuelto a roomId: ${roomId}`);
+    } else {
+      roomId = tournamentIdentifier.trim();
     }
 
-    const roomId = tournamentId.trim();
     const isNewRoom = !gameManager.getRoom(roomId);
     const isCreator = isNewRoom;
 
@@ -101,7 +122,8 @@ export const tournamentHandler = (io, socket) => {
       if (callback) {
         callback({
           message: "Unido al torneo",
-          roomId,
+          roomId, 
+          tournamentCode: tournamentIdentifier.startsWith("T_") ? tournamentIdentifier : undefined, 
           user: player.toSocketData(),
         });
       }
@@ -111,7 +133,13 @@ export const tournamentHandler = (io, socket) => {
         callback({ error: error.message });
       }
     }
-  });
+  } catch (error) {
+    console.error("❌ Error inesperado en tournament-join:", error);
+    if (callback) {
+      callback({ error: "Error interno al unirse al torneo" });
+    }
+  }
+});
 
   socket.on("tournament-start", ({ creatorId }) => {
     const roomId = socket.roomId;
