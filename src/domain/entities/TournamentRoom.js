@@ -146,23 +146,46 @@ export class TournamentRoom {
   }
 
   removePlayer(playerId) {
-    if (this.players.has(playerId)) {
-      const player = this.players.get(playerId);
-      const playerName = player.name || "Desconocido";
+    if (!this.players.has(playerId)) {
+      console.warn(`⚠️ [removePlayer] Jugador ${playerId} no existe en sala ${this.id}`);
+      return;
+    }
 
+    const player = this.players.get(playerId);
+    const playerName = player.name || "Desconocido";
+
+    if (this.isStarted) {
+      player.disconnected = true;
       player.hasLeft = true;
+      player.socket = null;
+      player.socketId = null;
 
       console.log(
-        `🚪 [TournamentRoom.removePlayer] Jugador ${playerId} (${playerName}) ABANDONÓ la sala de torneo ${this.id}`,
+        `⚠️ [TournamentRoom.removePlayer] Jugador ${playerId} (${playerName}) se DESCONECTÓ durante torneo activo. Marcado como desconectado.`,
       );
 
-      if (player.socket?.connected) {
-        player.socket.emit("tournament-left", {
-          reason: "left",
-          message: "Abandonaste el torneo. No serás elegible para premios.",
-        });
-        player.socket.disconnect(true);
-      }
+      this.broadcast("player-disconnected", {
+        playerId: player.id,
+        playerName,
+        message: `${playerName} se ha desconectado. El torneo continúa.`,
+      });
+
+      return;
+    }
+
+    player.hasLeft = true;
+    this.players.delete(playerId);
+
+    console.log(
+      `🚪 [TournamentRoom.removePlayer] Jugador ${playerId} (${playerName}) eliminado de sala ${this.id}`,
+    );
+
+    if (player.socket?.connected) {
+      player.socket.emit("tournament-left", {
+        reason: "left",
+        message: "Abandonaste el torneo. No serás elegible para premios.",
+      });
+      player.socket.disconnect(true);
     }
 
     this.broadcast("tournament-state-update", this.getTournamentState());
@@ -277,7 +300,7 @@ export class TournamentRoom {
           playablePot: this.playablePot,
           houseCut: this.totalPot - this.playablePot,
           leftPlayers: Array.from(this.players.values())
-            .filter((p) => p.hasLeft)
+            .filter((p) => p.hasLeft || p.disconnected) // ✅ Incluye desconectados
             .map((p) => ({ id: p.id, name: p.name })),
           message: "¡Torneo finalizado! Aquí están los resultados finales.",
         });
@@ -296,6 +319,7 @@ export class TournamentRoom {
             houseCut: this.totalPot - this.playablePot,
           });
 
+          // 📢 Notificar a jugadores conectados
           this.players.forEach((player) => {
             if (player.socket?.connected) {
               player.socket.emit("tournament-ended", {
@@ -306,11 +330,19 @@ export class TournamentRoom {
             }
           });
 
+          // 🧹 LIMPIEZA DEFINITIVA: Eliminar todos los jugadores del Map
+          // → Esto evita que persistan en /status o en el manager
+          this.players.clear();
+          console.log(`🗑️ [Torneo] Todos los jugadores eliminados de la sala ${this.id}`);
+
+          // 🧹 Eliminar sala del gameManager
           gameManager.removeRoom(this.id);
           console.log(`🗑️ [Torneo] Sala ${this.id} eliminada del gameManager`);
 
+          // 🧹 Limpiar timers, bets, etc.
           this.destroy();
         }, 10000);
+
         this.timeouts.push(timeoutId);
         return;
       } else {
