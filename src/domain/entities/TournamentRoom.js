@@ -3,6 +3,7 @@
 import { RouletteEngine } from "#domain/entities/RouletteEngine.js";
 import { emitErrorByKey } from "#shared/errorHandler.js";
 import { BetLimits } from "#domain/value-objects/BetLimits.js";
+import * as gameManager from "#app/managers/gameManager.js";
 import prisma from "#prisma";
 
 const GAME_STATES = {
@@ -24,12 +25,14 @@ export class TournamentRoom {
     this.gameState = GAME_STATES.BETTING;
     this.currentRound = 1;
     this.maxRounds = 2; //! Máximo número de rondas
-    this.timeRemaining = 20; //!! 60s Luego
+    this.timeRemaining = 30; //!! 60s Luego
     this.manualMode = false;
     this.rouletteEngine = new RouletteEngine(20);
     this.winningNumber = null;
     this.roundResults = [];
     this.countdownInterval = null;
+    this.timeouts = [];
+    this.intervals = [];
     this.isStarted = false;
     this.entryFee = 10000;
     this.houseCutPercentage = 0.2; // 20% para la casa
@@ -72,6 +75,7 @@ export class TournamentRoom {
     player.socket = socket;
     player.socketId = socket.id;
     player.ip = socket.handshake.address || "unknown";
+    player.hasLeft = false;
 
     this.players.set(player.id, player);
     socket.emit("player-initialized", {
@@ -143,15 +147,24 @@ export class TournamentRoom {
 
   removePlayer(playerId) {
     if (this.players.has(playerId)) {
-      const playerName = this.players.get(playerId)?.name || "Desconocido";
+      const player = this.players.get(playerId);
+      const playerName = player.name || "Desconocido";
+
+      player.hasLeft = true;
+
       console.log(
-        `🚪 [TournamentRoom.removePlayer] Jugador ${playerId} (${playerName}) ELIMINADO de sala de torneo ${this.id}`,
+        `🚪 [TournamentRoom.removePlayer] Jugador ${playerId} (${playerName}) ABANDONÓ la sala de torneo ${this.id}`,
       );
 
-      this.players.delete(playerId);
-      this.bets.delete(playerId);
-      this.lastBets.delete(playerId);
+      if (player.socket?.connected) {
+        player.socket.emit("tournament-left", {
+          reason: "left",
+          message: "Abandonaste el torneo. No serás elegible para premios.",
+        });
+        player.socket.disconnect(true);
+      }
     }
+
     this.broadcast("tournament-state-update", this.getTournamentState());
   }
 
@@ -159,6 +172,7 @@ export class TournamentRoom {
     if (!this.isStarted) return;
 
     this.stopCountdown();
+
     this.countdownInterval = setInterval(() => {
       if (this.gameState !== GAME_STATES.BETTING) return;
 
@@ -192,7 +206,8 @@ export class TournamentRoom {
         });
       });
 
-      setTimeout(() => this.spinWheel(), 6000);
+      const timeoutId = setTimeout(() => this.spinWheel(), 6000);
+      this.timeouts.push(timeoutId);
     } else if (this.gameState === GAME_STATES.SPINNING) {
       this.gameState = GAME_STATES.PAYOUT;
       this.processPayout(this.winningNumber);
@@ -231,13 +246,11 @@ export class TournamentRoom {
       this.roundResults.push(roundData);
 
       if (this.currentRound >= this.maxRounds) {
-        // ✅ PASO 1: Cambiar a estado RESULTS
         this.gameState = GAME_STATES.RESULTS;
 
         const finalStandings = this.calculateFinalStandings();
         const prizeDistribution = this.distributePrize(finalStandings);
 
-        // ✅ PASO 2: Asignar premios a los jugadores
         prizeDistribution.forEach(({ playerId, prize }) => {
           const player = this.players.get(playerId);
           if (player) {
@@ -258,26 +271,24 @@ export class TournamentRoom {
           }
         });
 
-        // ✅ PASO 3: EMITIR RESULTADOS (¡esto es lo que verán en pantalla!)
         this.broadcast("tournament-results", {
           standings: finalStandings,
           prizeDistribution,
           playablePot: this.playablePot,
           houseCut: this.totalPot - this.playablePot,
+          leftPlayers: Array.from(this.players.values())
+            .filter((p) => p.hasLeft)
+            .map((p) => ({ id: p.id, name: p.name })),
           message: "¡Torneo finalizado! Aquí están los resultados finales.",
         });
 
         console.log(`📊 [Torneo] Mostrando resultados finales por 10 segundos...`);
 
-        // ✅ PASO 4: Guardar torneo en DB
         this.saveTournamentToDB().catch(console.error);
 
-        // ✅ PASO 5: Después de 10 segundos → terminar y desconectar
-        setTimeout(() => {
-          // ✅ PASO 5.1: Cambiar a FINISHED
+        const timeoutId = setTimeout(() => {
           this.gameState = GAME_STATES.FINISHED;
 
-          // ✅ PASO 5.2: Notificar que el torneo ha terminado oficialmente
           this.broadcast("tournament-finished", {
             standings: finalStandings,
             prizeDistribution,
@@ -285,7 +296,6 @@ export class TournamentRoom {
             houseCut: this.totalPot - this.playablePot,
           });
 
-          // ✅ PASO 5.3: Desconectar a todos los jugadores
           this.players.forEach((player) => {
             if (player.socket?.connected) {
               player.socket.emit("tournament-ended", {
@@ -295,12 +305,15 @@ export class TournamentRoom {
               player.socket.disconnect(true);
             }
           });
-        }, 10000); // ← 10 segundos para ver los resultados
 
-        // ✅ ¡NO HACER NADA MÁS! No resetear ronda, no continuar.
+          gameManager.removeRoom(this.id);
+          console.log(`🗑️ [Torneo] Sala ${this.id} eliminada del gameManager`);
+
+          this.destroy();
+        }, 10000);
+        this.timeouts.push(timeoutId);
         return;
       } else {
-        // Si no es la última ronda, continuar normalmente
         this.currentRound++;
         this.resetRound();
       }
@@ -327,7 +340,7 @@ export class TournamentRoom {
     this.bets.clear();
     this.lastBets.clear();
     this.gameState = GAME_STATES.BETTING;
-    this.timeRemaining = 10;
+    this.timeRemaining = 30;
     this.startCountdown();
     this.broadcast("tournament-state-update", this.getTournamentState());
 
@@ -433,11 +446,13 @@ export class TournamentRoom {
       ).catch(console.error);
     });
 
-    setTimeout(() => this.nextState(), 5000);
+    const timeoutId = setTimeout(() => this.nextState(), 5000);
+    this.timeouts.push(timeoutId);
   }
 
   calculateFinalStandings() {
     return Array.from(this.players.values())
+      .filter((player) => !player.hasLeft)
       .map((player) => ({
         id: player.id,
         name: player.name,
@@ -468,6 +483,17 @@ export class TournamentRoom {
         prev.tournamentBalance > current.tournamentBalance ? prev : current,
       )
       .toSocketData();
+  }
+
+  destroy() {
+    this.players.clear();
+    this.bets.clear();
+    this.lastBets.clear();
+    this.timeouts.forEach(clearTimeout);
+    this.intervals.forEach(clearInterval);
+    this.timeouts = [];
+    this.intervals = [];
+    console.log(`[TournamentRoom] Sala ${this.id} destruida. Todos los timers limpiados.`);
   }
 
   async saveTournamentToDB() {

@@ -1,4 +1,4 @@
-# 📂 Estructura de carpetas
+# 📂 Estructura de src
 
 - 📂 application
   - 📂 managers

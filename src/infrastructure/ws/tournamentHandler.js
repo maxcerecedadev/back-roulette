@@ -218,15 +218,41 @@ export const tournamentHandler = (io, socket) => {
     for (const [roomId, room] of getActiveTournamentRooms()) {
       if (room.players.has(player.id)) {
         const playerName = player.name || "Desconocido";
+
+        if (room.isStarted) {
+          console.warn(
+            `⚠️ [Torneo] Jugador ${playerName} (${player.id}) se DESCONECTÓ, pero el torneo YA EMPEZÓ. No se elimina del juego.`,
+          );
+
+          // Opcional: marcarlo como "desconectado" pero mantenerlo en la sala
+          // para que el torneo pueda terminar correctamente.
+          // Puedes agregar un flag: player.isDisconnected = true;
+
+          room.broadcast("player-disconnected", {
+            playerId: player.id,
+            playerName,
+            message: `${playerName} se ha desconectado, pero el torneo continúa.`,
+          });
+
+          if (player.socket) {
+            player.socket = null;
+            player.socketId = null;
+          }
+
+          delete socket.player;
+          delete socket.roomId;
+
+          console.log(`ℹ️ Jugador ${player.id} marcado como desconectado. Torneo sigue activo.`);
+          return;
+        }
+
         console.log(
           `🚪 [Torneo] Jugador ${playerName} (${player.id}) se DESCONECTÓ de sala ${roomId}`,
         );
 
         room.removePlayer(player.id);
-
         delete socket.player;
         delete socket.roomId;
-        console.log(`♻️ [Torneo] Referencias de socket limpiadas tras desconexión`);
 
         console.log(`👥 [Torneo] Sala ${roomId} ahora tiene ${room.players.size} jugadores`);
 
@@ -234,6 +260,7 @@ export const tournamentHandler = (io, socket) => {
           gameManager.removeRoom(roomId);
           console.log(`🗑️ [Torneo] Sala ${roomId} ELIMINADA por inactividad`);
         }
+
         break;
       }
     }

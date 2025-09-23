@@ -90,6 +90,7 @@ export const removeRoom = (roomId) => {
       });
 
       if (room.stopCountdown) room.stopCountdown();
+      if (typeof room.destroy === "function") room.destroy(); // ← Seguro
 
       map.delete(roomId);
       console.log(`🗑️ Sala ${roomId} (${name}) eliminada del manager.`);
