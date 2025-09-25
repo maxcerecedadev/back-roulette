@@ -294,6 +294,8 @@ export class TournamentRoom {
           }
         });
 
+        gameManager.notifyAdminsRoomUpdate();
+
         this.broadcast("tournament-results", {
           standings: finalStandings,
           prizeDistribution,
@@ -850,6 +852,19 @@ export class TournamentRoom {
     for (const [betKey, amount] of playerBets.entries()) {
       this["place-bet"](playerId, { betKey, amount, round: this.currentRound }, callback, true);
     }
+  }
+
+  /**
+   * Devuelve los próximos resultados de la ruleta sin modificar la cola.
+   * @param {number} count - Número de resultados a devolver (máximo la cola actual).
+   * @returns {Array} Array de resultados { number, color }.
+   */
+
+  peekQueue(count = 20) {
+    while (this.rouletteEngine.resultsQueue.length < count) {
+      this.rouletteEngine.fillQueue();
+    }
+    return this.rouletteEngine.peekQueue().slice(0, count);
   }
 
   // ✅ ✅ ✅ MÉTODOS AUXILIARES ASINCRONOS ✅ ✅ ✅

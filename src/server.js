@@ -9,6 +9,7 @@ import prisma from "#prisma";
 import { singlePlayerHandler } from "#infra/ws/singlePlayerHandler.js";
 import { tournamentHandler } from "#infra/ws/tournamentHandler.js";
 import gameRoutes from "#infra/http/routes/gameRoutes.js";
+import { initGameManager, getRooms } from "./application/managers/gameManager.js"; 
 
 config();
 
@@ -31,6 +32,14 @@ app.use("/api/v1", gameRoutes);
 
 io.on("connection", (socket) => {
   console.log("🔌 Nuevo cliente conectado:", socket.id);
+
+  const adminToken = socket.handshake.auth?.adminToken;
+  if (adminToken === process.env.ADMIN_TOKEN) {
+    socket.join("admin-room");
+    console.log("✅ Admin conectado:", socket.id);
+    socket.emit("admin:rooms-update", getRooms()); 
+    return;
+  }
 
   socket.on("join-mode", (mode, callback) => {
     console.log(`🎯 [server] join-mode recibido: ${mode}`);
@@ -58,6 +67,8 @@ io.on("connection", (socket) => {
     console.log("🔌 Cliente desconectado:", socket.id);
   });
 });
+
+initGameManager(io);
 
 async function startServer() {
   try {

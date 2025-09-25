@@ -3,6 +3,32 @@
 import { SinglePlayerRoom } from "#domain/entities/SinglePlayerRoom.js";
 import { TournamentRoom } from "#domain/entities/TournamentRoom.js";
 
+let ioInstance = null;
+
+/**
+ * Inicializa el GameManager con la instancia de Socket.IO
+ * @param {import("socket.io").Server} io
+ */
+
+export const initGameManager = (io) => {
+  if (ioInstance) {
+    throw new Error("GameManager ya fue inicializado");
+  }
+  ioInstance = io;
+  console.log("🎮 GameManager inicializado con Socket.IO");
+};
+
+/**
+ * Obtiene la instancia de Socket.IO (solo para uso interno)
+ */
+
+const getIO = () => {
+  if (!ioInstance) {
+    throw new Error("GameManager no ha sido inicializado. Llama a initGameManager(io) primero.");
+  }
+  return ioInstance;
+};
+
 const singleRooms = new Map();
 const tournamentRooms = new Map();
 
@@ -10,6 +36,22 @@ const ROOM_TYPES = [
   { name: "tournament", map: tournamentRooms },
   { name: "single", map: singleRooms },
 ];
+
+// Notificar a admins cuando cambie el estado global ===
+/**
+ * Emite el estado actual de todas las salas a los clientes admin.
+ */
+
+export const notifyAdminsRoomUpdate = () => {
+  try {
+    const io = getIO();
+    const status = getRooms(); // obtiene el estado actual
+    io.to("admin-room").emit("admin:rooms-update", status);
+    console.log(`📡 [Admin] Evento 'admin:rooms-update' emitido a room 'admin-room'`);
+  } catch (err) {
+    console.warn("⚠️ No se pudo notificar a admins:", err.message);
+  }
+};
 
 /**
  * Obtiene o crea una sala de un solo jugador.
@@ -23,6 +65,7 @@ export const getOrCreateSingleRoom = (roomId, io) => {
     const newRoom = new SinglePlayerRoom(io, roomId);
     singleRooms.set(roomId, newRoom);
     console.log(`🆕 [GameManager] Sala SINGLE creada: ${roomId}`);
+    notifyAdminsRoomUpdate();
     return newRoom;
   }
   console.log(`🔁 [GameManager] Sala SINGLE existente obtenida: ${roomId}`);
@@ -42,25 +85,11 @@ export const getOrCreateTournamentRoom = (roomId, io, creatorId) => {
     const newRoom = new TournamentRoom(io, roomId, creatorId);
     tournamentRooms.set(roomId, newRoom);
     console.log(`🏆 [GameManager] Sala TORNEO creada: ${roomId} (creador: ${creatorId})`);
+    notifyAdminsRoomUpdate();
     return newRoom;
   }
   console.log(`🔁 [GameManager] Sala TORNEO existente obtenida: ${roomId}`);
   return tournamentRooms.get(roomId);
-};
-
-/**
- * Obtiene una sala existente por su ID.
- * @param {string} roomId - El ID de la sala.
- * @returns {SinglePlayerRoom | TournamentRoom | undefined} La instancia de la sala o undefined si no se encuentra.
- */
-
-export const getRoom = (roomId) => {
-  for (const { map } of ROOM_TYPES) {
-    if (map.has(roomId)) {
-      return map.get(roomId);
-    }
-  }
-  return undefined;
 };
 
 /**
@@ -90,14 +119,30 @@ export const removeRoom = (roomId) => {
       });
 
       if (room.stopCountdown) room.stopCountdown();
-      if (typeof room.destroy === "function") room.destroy(); // ← Seguro
+      if (typeof room.destroy === "function") room.destroy();
 
       map.delete(roomId);
       console.log(`🗑️ Sala ${roomId} (${name}) eliminada del manager.`);
+      notifyAdminsRoomUpdate();
       return true;
     }
   }
   return false;
+};
+
+/**
+ * Obtiene una sala existente por su ID.
+ * @param {string} roomId - El ID de la sala.
+ * @returns {SinglePlayerRoom | TournamentRoom | undefined} La instancia de la sala o undefined si no se encuentra.
+ */
+
+export const getRoom = (roomId) => {
+  for (const { map } of ROOM_TYPES) {
+    if (map.has(roomId)) {
+      return map.get(roomId);
+    }
+  }
+  return undefined;
 };
 
 /**
@@ -107,12 +152,22 @@ export const removeRoom = (roomId) => {
 
 export const getRooms = () => {
   const allRooms = [...singleRooms.values(), ...tournamentRooms.values()];
-  return allRooms.map((room) => ({
-    id: room.id,
-    gameState: room.gameState,
-    playersCount: room.players?.size || 0,
-    players: Array.from(room.players?.values() || []).map((player) => player.toSocketData()),
-  }));
+  return allRooms.map((room) => {
+    const roomType =
+      room instanceof TournamentRoom
+        ? "tournament"
+        : room instanceof SinglePlayerRoom
+          ? "single"
+          : "unknown";
+
+    return {
+      id: room.id,
+      roomType,
+      gameState: room.gameState,
+      playersCount: room.players?.size || 0,
+      players: Array.from(room.players?.values() || []).map((player) => player.toSocketData()),
+    };
+  });
 };
 
 /**
@@ -170,3 +225,19 @@ export const getRoomsForAdmin = () => ({
   single: Array.from(singleRooms.keys()),
   tournament: Array.from(tournamentRooms.keys()),
 });
+
+export const notifyAdminPlayerBalanceUpdate = (roomId, playerId, balance) => {
+  try {
+    const io = getIO();
+    io.to("admin-room").emit("admin:player-balance-update", {
+      roomId,
+      playerId,
+      balance,
+    });
+    console.log(
+      `📡 [Admin] Balance actualizado: sala=${roomId}, jugador=${playerId}, balance=${balance}`,
+    );
+  } catch (err) {
+    console.warn("⚠️ No se pudo notificar cambio de balance a admins:", err.message);
+  }
+};

@@ -37,6 +37,8 @@ export const singlePlayerHandler = (io, socket) => {
       room.addPlayer(player, socket);
       socket.join(roomId);
 
+      gameManager.notifyAdminsRoomUpdate();
+
       if (callback) {
         callback({
           message: "Unido",
@@ -67,35 +69,76 @@ export const singlePlayerHandler = (io, socket) => {
       return;
     }
 
-    room.placeBet(playerId, betKey, amount);
+    try {
+      room.placeBet(playerId, betKey, amount);
+      const player = room.getPlayer(playerId);
+      if (player) {
+        gameManager.notifyAdminPlayerBalanceUpdate(roomId, playerId, player.balance);
+      }
+    } catch (error) {
+      console.error("Error placing bet:", error);
+      socket.emit("error", { message: error.message });
+    }
   });
 
   socket.on("clear-bets", ({ roomId }) => {
     const room = gameManager.getRoom(roomId);
     const playerId = getPlayerId();
     if (!room || !playerId) return;
-    room.clearBets(playerId);
+    try {
+      room.clearBets(playerId);
+      const player = room.getPlayer(playerId);
+      if (player) {
+        gameManager.notifyAdminPlayerBalanceUpdate(roomId, playerId, player.balance);
+      }
+    } catch (error) {
+      console.error("Error clearing bets:", error);
+    }
   });
 
   socket.on("undo-bet", ({ roomId }) => {
     const room = gameManager.getRoom(roomId);
     const playerId = getPlayerId();
     if (!room || !playerId) return;
-    room.undoBet(playerId);
+    try {
+      room.undoBet(playerId);
+      const player = room.getPlayer(playerId);
+      if (player) {
+        gameManager.notifyAdminPlayerBalanceUpdate(roomId, playerId, player.balance);
+      }
+    } catch (error) {
+      console.error("Error undoing bet:", error);
+    }
   });
 
   socket.on("repeat-bet", ({ roomId }) => {
     const room = gameManager.getRoom(roomId);
     const playerId = getPlayerId();
     if (!room || !playerId) return;
-    room.repeatBet(playerId);
+    try {
+      room.repeatBet(playerId);
+      const player = room.getPlayer(playerId);
+      if (player) {
+        gameManager.notifyAdminPlayerBalanceUpdate(roomId, playerId, player.balance);
+      }
+    } catch (error) {
+      console.error("Error repeating bet:", error);
+    }
   });
 
   socket.on("double-bet", ({ roomId }) => {
     const room = gameManager.getRoom(roomId);
     const playerId = getPlayerId();
     if (!room || !playerId) return;
-    room.doubleBet(playerId);
+    try {
+      room.doubleBet(playerId);
+      const player = room.getPlayer(playerId);
+      if (player) {
+        gameManager.notifyAdminPlayerBalanceUpdate(roomId, playerId, player.balance);
+      }
+    } catch (error) {
+      console.error("Error doubling bet:", error);
+    }
   });
 
   socket.on("spin", ({ roomId }) => {
@@ -107,7 +150,11 @@ export const singlePlayerHandler = (io, socket) => {
     }
 
     if (room.gameState === "spinning") {
-      room.triggerSpin();
+      try {
+        room.triggerSpin();
+      } catch (error) {
+        console.error("Error triggering spin:", error);
+      }
     }
   });
 
@@ -119,6 +166,7 @@ export const singlePlayerHandler = (io, socket) => {
       if (socket.player) {
         room.stopCountdown();
         room.removePlayer(socket.player.id);
+        gameManager.notifyAdminsRoomUpdate();
       }
 
       gameManager.removeRoom(roomId);

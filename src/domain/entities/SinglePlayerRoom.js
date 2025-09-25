@@ -5,6 +5,7 @@ import { emitErrorByKey } from "#shared/errorHandler.js";
 import { BetLimits } from "#domain/value-objects/BetLimits.js";
 import prisma from "#prisma";
 import { CasinoApiService } from "#infra/api/casinoApiService.js";
+import * as gameManager from "#app/managers/gameManager.js";
 
 const GAME_STATES = {
   BETTING: "betting",
@@ -26,6 +27,7 @@ export class SinglePlayerRoom {
     this.winningNumber = null;
     this.lastWinningNumber = null;
     this.startCountdown();
+    this.gameManager = gameManager;
   }
 
   broadcast(event, data) {
@@ -58,6 +60,10 @@ export class SinglePlayerRoom {
     if (this.players.has(playerId)) {
       this.players.delete(playerId);
     }
+  }
+
+  getPlayer(playerId) {
+    return this.players.get(playerId);
   }
 
   startCountdown() {
@@ -252,9 +258,17 @@ export class SinglePlayerRoom {
         .create({ data: roundData })
         .then(() => {
           console.log(`✅ Ronda guardada en DB para jugador ${playerId}`);
+          const player = this.players.get(playerId);
+          if (player) {
+            this.gameManager.notifyAdminPlayerBalanceUpdate(this.id, playerId, player.balance);
+          }
         })
         .catch((err) => {
           console.error(`❌ Error al guardar ronda para jugador ${playerId}:`, err);
+          const player = this.players.get(playerId);
+          if (player) {
+            this.gameManager.notifyAdminPlayerBalanceUpdate(this.id, playerId, player.balance);
+          }
         });
     });
 

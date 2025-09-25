@@ -27,119 +27,129 @@ export const tournamentHandler = (io, socket) => {
     return rooms;
   };
 
-  socket.on("tournament-join", async (data, callback) => { 
-  const { userId, userName, balance, tournamentId: tournamentIdentifier } = data;
+  socket.on("tournament-join", async (data, callback) => {
+    const { userId, userName, balance, tournamentId: tournamentIdentifier } = data;
 
-  const playerId = userId;
+    const playerId = userId;
 
-  if (!tournamentIdentifier || typeof tournamentIdentifier !== "string" || tournamentIdentifier.trim() === "") {
-    console.error("❌ [tournamentHandler] tournamentId inválido o faltante");
-    if (callback) {
-      callback({ error: "tournamentId es requerido" });
-    }
-    return;
-  }
-
-  try {
-    let roomId;
-    if (tournamentIdentifier.startsWith("T_") && tournamentIdentifier.includes("_")) {
-      const tournament = await prisma.tournament.findUnique({
-        where: { code: tournamentIdentifier },
-      });
-
-      if (!tournament) {
-        console.error(`❌ Torneo no encontrado por código: ${tournamentIdentifier}`);
-        if (callback) {
-          callback({ error: "Torneo no encontrado" });
-        }
-        return;
+    if (
+      !tournamentIdentifier ||
+      typeof tournamentIdentifier !== "string" ||
+      tournamentIdentifier.trim() === ""
+    ) {
+      console.error("❌ [tournamentHandler] tournamentId inválido o faltante");
+      if (callback) {
+        callback({ error: "tournamentId es requerido" });
       }
-
-      roomId = tournament.id; 
-      console.log(`✅ [tournamentHandler] Código legible "${tournamentIdentifier}" resuelto a roomId: ${roomId}`);
-    } else {
-      roomId = tournamentIdentifier.trim();
-    }
-
-    const isNewRoom = !gameManager.getRoom(roomId);
-    const isCreator = isNewRoom;
-
-    if (socket.player) {
-      console.log(`♻️ [Torneo] Limpiando jugador anterior: ${socket.player.id}`);
-
-      for (const [existingRoomId, existingRoom] of getActiveTournamentRooms()) {
-        if (existingRoom.players.has(socket.player.id)) {
-          console.log(
-            `🚪 Eliminando jugador ${socket.player.id} de sala anterior ${existingRoomId}`,
-          );
-          existingRoom.removePlayer(socket.player.id);
-          if (existingRoom.players.size === 0) {
-            gameManager.removeRoom(existingRoomId);
-            console.log(`🗑️ Sala anterior ${existingRoomId} eliminada (quedó vacía)`);
-          }
-        }
-      }
-      delete socket.player;
-      delete socket.roomId;
-    }
-
-    const player = new Player(userId, userName, balance, isCreator);
-    socket.player = player;
-
-    console.log(
-      `🔎 [tournamentHandler] ANTES de unirse: buscando si jugador ${playerId} ya está en alguna sala...`,
-    );
-
-    for (const [existingRoomId, existingRoom] of getActiveTournamentRooms()) {
-      if (existingRoom.players.has(playerId)) {
-        console.warn(
-          `⚠️ [tournamentHandler] ¡Jugador ${playerId} YA ESTÁ en sala ${existingRoomId}!`,
-        );
-        existingRoom.removePlayer(playerId);
-      }
+      return;
     }
 
     try {
-      const room = gameManager.getOrCreateTournamentRoom(
-        roomId,
-        io,
-        isCreator ? userId : undefined,
-      );
+      let roomId;
+      if (tournamentIdentifier.startsWith("T_") && tournamentIdentifier.includes("_")) {
+        const tournament = await prisma.tournament.findUnique({
+          where: { code: tournamentIdentifier },
+        });
+
+        if (!tournament) {
+          console.error(`❌ Torneo no encontrado por código: ${tournamentIdentifier}`);
+          if (callback) {
+            callback({ error: "Torneo no encontrado" });
+          }
+          return;
+        }
+
+        roomId = tournament.id;
+        console.log(
+          `✅ [tournamentHandler] Código legible "${tournamentIdentifier}" resuelto a roomId: ${roomId}`,
+        );
+      } else {
+        roomId = tournamentIdentifier.trim();
+      }
+
+      const isNewRoom = !gameManager.getRoom(roomId);
+      const isCreator = isNewRoom;
+
+      if (socket.player) {
+        console.log(`♻️ [Torneo] Limpiando jugador anterior: ${socket.player.id}`);
+
+        for (const [existingRoomId, existingRoom] of getActiveTournamentRooms()) {
+          if (existingRoom.players.has(socket.player.id)) {
+            console.log(
+              `🚪 Eliminando jugador ${socket.player.id} de sala anterior ${existingRoomId}`,
+            );
+            existingRoom.removePlayer(socket.player.id);
+            if (existingRoom.players.size === 0) {
+              gameManager.removeRoom(existingRoomId);
+              console.log(`🗑️ Sala anterior ${existingRoomId} eliminada (quedó vacía)`);
+            }
+          }
+        }
+        delete socket.player;
+        delete socket.roomId;
+      }
+
+      const player = new Player(userId, userName, balance, isCreator);
+      socket.player = player;
 
       console.log(
-        `🎯 [Torneo] Jugador ${userName} (${userId}) ${
-          isCreator ? "CREÓ" : "SE UNIÓ A"
-        } la sala ${roomId}`,
+        `🔎 [tournamentHandler] ANTES de unirse: buscando si jugador ${playerId} ya está en alguna sala...`,
       );
 
-      socket.join(roomId);
-      socket.roomId = roomId;
+      for (const [existingRoomId, existingRoom] of getActiveTournamentRooms()) {
+        if (existingRoom.players.has(playerId)) {
+          console.warn(
+            `⚠️ [tournamentHandler] ¡Jugador ${playerId} YA ESTÁ en sala ${existingRoomId}!`,
+          );
+          existingRoom.removePlayer(playerId);
+        }
+      }
 
-      room.addPlayer(player, socket);
+      try {
+        const room = gameManager.getOrCreateTournamentRoom(
+          roomId,
+          io,
+          isCreator ? userId : undefined,
+        );
 
-      console.log(`👥 [Torneo] Sala ${roomId} ahora tiene ${room.players.size}/3 jugadores`);
+        console.log(
+          `🎯 [Torneo] Jugador ${userName} (${userId}) ${
+            isCreator ? "CREÓ" : "SE UNIÓ A"
+          } la sala ${roomId}`,
+        );
 
-      if (callback) {
-        callback({
-          message: "Unido al torneo",
-          roomId, 
-          tournamentCode: tournamentIdentifier.startsWith("T_") ? tournamentIdentifier : undefined, 
-          user: player.toSocketData(),
-        });
+        socket.join(roomId);
+        socket.roomId = roomId;
+
+        room.addPlayer(player, socket);
+
+        console.log(`👥 [Torneo] Sala ${roomId} ahora tiene ${room.players.size}/3 jugadores`);
+
+        gameManager.notifyAdminsRoomUpdate();
+
+        if (callback) {
+          callback({
+            message: "Unido al torneo",
+            roomId,
+            tournamentCode: tournamentIdentifier.startsWith("T_")
+              ? tournamentIdentifier
+              : undefined,
+            user: player.toSocketData(),
+          });
+        }
+      } catch (error) {
+        console.error(`❌ [Torneo] Error al unirse (${userName}):`, error.message);
+        if (callback) {
+          callback({ error: error.message });
+        }
       }
     } catch (error) {
-      console.error(`❌ [Torneo] Error al unirse (${userName}):`, error.message);
+      console.error("❌ Error inesperado en tournament-join:", error);
       if (callback) {
-        callback({ error: error.message });
+        callback({ error: "Error interno al unirse al torneo" });
       }
     }
-  } catch (error) {
-    console.error("❌ Error inesperado en tournament-join:", error);
-    if (callback) {
-      callback({ error: "Error interno al unirse al torneo" });
-    }
-  }
-});
+  });
 
   socket.on("tournament-start", ({ creatorId }) => {
     const roomId = socket.roomId;
@@ -163,6 +173,8 @@ export const tournamentHandler = (io, socket) => {
       );
 
       socket.emit("tournament-started", { round: room.currentRound });
+
+      gameManager.notifyAdminsRoomUpdate();
     } catch (error) {
       socket.emit("error", { message: error.message });
       console.error(`❌ [Torneo] Error iniciando torneo en ${roomId}:`, error.message);
@@ -181,7 +193,12 @@ export const tournamentHandler = (io, socket) => {
 
       if (typeof room[event] === "function") {
         console.log(`🎰 [Torneo] Jugador ${playerId} ejecutó ${event} en sala ${roomId}`);
-        room[event](playerId, data);
+        try {
+          room[event](playerId, data);
+        } catch (error) {
+          console.error(`Error en tournament-${event}:`, error);
+          socket.emit("error", { message: error.message });
+        }
       }
     });
   });
@@ -252,10 +269,6 @@ export const tournamentHandler = (io, socket) => {
             `⚠️ [Torneo] Jugador ${playerName} (${player.id}) se DESCONECTÓ, pero el torneo YA EMPEZÓ. No se elimina del juego.`,
           );
 
-          // Opcional: marcarlo como "desconectado" pero mantenerlo en la sala
-          // para que el torneo pueda terminar correctamente.
-          // Puedes agregar un flag: player.isDisconnected = true;
-
           room.broadcast("player-disconnected", {
             playerId: player.id,
             playerName,
@@ -271,6 +284,9 @@ export const tournamentHandler = (io, socket) => {
           delete socket.roomId;
 
           console.log(`ℹ️ Jugador ${player.id} marcado como desconectado. Torneo sigue activo.`);
+
+          gameManager.notifyAdminsRoomUpdate();
+
           return;
         }
 
@@ -283,6 +299,8 @@ export const tournamentHandler = (io, socket) => {
         delete socket.roomId;
 
         console.log(`👥 [Torneo] Sala ${roomId} ahora tiene ${room.players.size} jugadores`);
+
+        gameManager.notifyAdminsRoomUpdate();
 
         if (room.players.size === 0) {
           gameManager.removeRoom(roomId);
