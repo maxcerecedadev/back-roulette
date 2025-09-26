@@ -2,6 +2,7 @@
 
 import * as gameManager from "#app/managers/gameManager.js";
 import { Player } from "#domain/entities/Player.js";
+import { CasinoApiService } from "#infra/api/casinoApiService.js";
 
 /**
  * @param {object} socket - La instancia del socket del cliente que se ha conectado.
@@ -18,7 +19,7 @@ export const singlePlayerHandler = (io, socket) => {
     return undefined;
   };
 
-  socket.on("single-join", (data, callback) => {
+  socket.on("single-join", async (data, callback) => {
     console.log(`🎯 [singlePlayerHandler] single-join recibido:`, data);
     const { userId, userName, balance } = data;
 
@@ -27,7 +28,15 @@ export const singlePlayerHandler = (io, socket) => {
       delete socket.player;
     }
 
-    const player = new Player(userId, userName, balance);
+    let realBalance = balance;
+    try {
+      realBalance = await CasinoApiService.getPlayerBalance(userId);
+    } catch (error) {
+      console.error("❌ Error obteniendo balance real del casino:", error);
+      realBalance = balance;
+    }
+
+    const player = new Player(userId, userName, realBalance);
     socket.player = player;
 
     const roomId = socket.id;
@@ -156,6 +165,43 @@ export const singlePlayerHandler = (io, socket) => {
         console.error("Error triggering spin:", error);
       }
     }
+  });
+
+  socket.on("leave-room", async ({ roomId, userId }) => {
+    console.log(`🚪 [singlePlayerHandler] Jugador ${userId} solicitó salir de sala ${roomId}`);
+
+    if (!roomId || !userId) {
+      console.warn("⚠️ [singlePlayerHandler] leave-room: faltan roomId o userId");
+      socket.emit("error", { message: "Faltan parámetros." });
+      return;
+    }
+
+    const room = gameManager.getRoom(roomId);
+    if (!room) {
+      console.warn(`⚠️ [singlePlayerHandler] Sala ${roomId} no encontrada al salir`);
+      socket.emit("error", { message: "Sala no encontrada." });
+      return;
+    }
+
+    const player = room.getPlayer(userId);
+    if (player) {
+      socket.emit("balance-updated", { balance: player.balance });
+    }
+
+    if (room.players.has(userId)) {
+      room.removePlayer(userId);
+      console.log(`✅ [singlePlayerHandler] Jugador ${userId} eliminado de sala ${roomId}`);
+    }
+
+    if (socket.player && socket.player.id === userId) {
+      delete socket.player;
+      console.log(`♻️ [singlePlayerHandler] socket.player limpiado para ${userId}`);
+    }
+
+    socket.leave(roomId);
+
+    gameManager.removeRoom(roomId);
+    console.log(`🗑️ [singlePlayerHandler] Sala ${roomId} eliminada al salir (single player)`);
   });
 
   socket.on("disconnect", () => {

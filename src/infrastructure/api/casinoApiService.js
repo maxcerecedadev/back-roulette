@@ -73,8 +73,8 @@ export class CasinoApiService {
     } catch (error) {
       console.error(`❌ [CASINO API] Error al realizar apuesta para usuario ${userId}:`, {
         message: error.message,
-        status: error.response?.status,
-        data: error.response?.data,
+        status: error.response ? error.response.status : null,
+        data: error.response ? error.response.data : null,
       });
 
       await prisma.externalTransaction.create({
@@ -158,8 +158,8 @@ export class CasinoApiService {
     } catch (error) {
       console.error(`❌ [CASINO API] Error al depositar ganancias para usuario ${userId}:`, {
         message: error.message,
-        status: error.response?.status,
-        data: error.response?.data,
+        status: error.response ? error.response.status : null,
+        data: error.response ? error.response.data : null,
       });
 
       await prisma.externalTransaction.create({
@@ -176,6 +176,54 @@ export class CasinoApiService {
       });
 
       throw new Error("Error al depositar ganancias. Por favor, contacta soporte.");
+    }
+  }
+
+  static async getPlayerBalance(userId) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { externalToken: true, name: true },
+    });
+
+    if (!user || !user.externalToken) {
+      throw new Error("Usuario no tiene token externo asociado");
+    }
+
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/usuario/ruleta-user-info`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${user.externalToken}`,
+            "Content-Type": "application/json",
+          },
+          timeout: 5000,
+        },
+      );
+
+      const { success, creditos } = response.data;
+
+      if (!success) {
+        throw new Error(response.data.message || "La API externa no pudo obtener el balance");
+      }
+
+      const balance = parseFloat(creditos);
+      if (isNaN(balance)) {
+        throw new Error("Balance inválido recibido del proveedor");
+      }
+
+      console.log(`✅ [CASINO API] Balance obtenido para usuario ${user.name}: ${balance}`);
+
+      return balance;
+    } catch (error) {
+      console.error(`❌ [CASINO API] Error al obtener balance para usuario ${userId}:`, {
+        message: error.message,
+        status: error.response ? error.response.status : null,
+        data: error.response ? error.response.data : null,
+      });
+
+      throw new Error("Error al obtener balance. Por favor, contacta soporte.");
     }
   }
 }

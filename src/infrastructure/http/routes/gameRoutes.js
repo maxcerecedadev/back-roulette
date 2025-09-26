@@ -221,10 +221,10 @@ router.post("/tournament/create", async (req, res) => {
 
   try {
     const now = new Date();
-    const year = now.getFullYear().toString().slice(-2); 
-    const month = String(now.getMonth() + 1).padStart(2, "0"); 
-    const day = String(now.getDate()).padStart(2, "0"); 
-    const dateKey = `${year}${month}${day}`; 
+    const year = now.getFullYear().toString().slice(-2);
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    const dateKey = `${year}${month}${day}`;
 
     let counter = await prisma.dailyTournamentCounter.upsert({
       where: { dateKey },
@@ -239,13 +239,13 @@ router.post("/tournament/create", async (req, res) => {
       },
     });
 
-    const sequence = String(counter.count).padStart(3, "0"); 
+    const sequence = String(counter.count).padStart(3, "0");
     const tournamentCode = `T_${dateKey}_${sequence}`;
 
     const tournament = await prisma.tournament.create({
       data: {
-        code: tournamentCode, 
-        rounds: maxRounds,    
+        code: tournamentCode,
+        rounds: maxRounds,
         currentRound: 0,
         maxPlayers,
         status: "WAITING",
@@ -258,8 +258,8 @@ router.post("/tournament/create", async (req, res) => {
 
     res.json({
       success: true,
-      tournamentId: tournament.id,      
-      tournamentCode,                   
+      tournamentId: tournament.id,
+      tournamentCode,
       maxPlayers,
       maxRounds,
       message: "Torneo creado exitosamente",
