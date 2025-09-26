@@ -157,17 +157,18 @@ router.post("/auth/validate-token", async (req, res) => {
     const userName = usuario;
 
     const user = await prisma.user.upsert({
-      where: { externalToken: token },
+      where: { name: userName },
       update: {
         name: userName,
         lastLogin: new Date(),
         balance: balance,
+        externalToken: token,
       },
       create: {
         id: uuidv4(),
         name: userName,
-        externalToken: token,
         balance: balance,
+        externalToken: token,
       },
     });
 

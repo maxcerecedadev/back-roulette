@@ -53,6 +53,61 @@ CREATE TABLE "public"."ExternalTransaction" (
     CONSTRAINT "ExternalTransaction_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "public"."FailedTransaction" (
+    "id" TEXT NOT NULL,
+    "playerId" TEXT NOT NULL,
+    "roomId" TEXT NOT NULL,
+    "type" TEXT NOT NULL,
+    "amount" DOUBLE PRECISION NOT NULL,
+    "error" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'PENDING',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "FailedTransaction_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "public"."Tournament" (
+    "id" TEXT NOT NULL,
+    "code" TEXT NOT NULL,
+    "maxPlayers" INTEGER NOT NULL DEFAULT 3,
+    "rounds" INTEGER NOT NULL,
+    "currentRound" INTEGER NOT NULL,
+    "status" TEXT NOT NULL,
+    "results" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Tournament_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "public"."Round" (
+    "id" TEXT NOT NULL,
+    "tournamentId" TEXT NOT NULL,
+    "roundNumber" INTEGER NOT NULL,
+    "winningNumber" INTEGER,
+    "winningColor" TEXT,
+    "playerResults" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Round_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "public"."daily_tournament_counters" (
+    "id" SERIAL NOT NULL,
+    "dateKey" TEXT NOT NULL,
+    "count" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "daily_tournament_counters_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "users_name_key" ON "public"."users"("name");
+
 -- CreateIndex
 CREATE UNIQUE INDEX "users_externalToken_key" ON "public"."users"("externalToken");
 
@@ -83,5 +138,17 @@ CREATE INDEX "ExternalTransaction_userId_idx" ON "public"."ExternalTransaction"(
 -- CreateIndex
 CREATE INDEX "ExternalTransaction_status_idx" ON "public"."ExternalTransaction"("status");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "Tournament_code_key" ON "public"."Tournament"("code");
+
+-- CreateIndex
+CREATE INDEX "Tournament_code_idx" ON "public"."Tournament"("code");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "daily_tournament_counters_dateKey_key" ON "public"."daily_tournament_counters"("dateKey");
+
 -- AddForeignKey
 ALTER TABLE "public"."roulette_rounds" ADD CONSTRAINT "roulette_rounds_playerId_fkey" FOREIGN KEY ("playerId") REFERENCES "public"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."Round" ADD CONSTRAINT "Round_tournamentId_fkey" FOREIGN KEY ("tournamentId") REFERENCES "public"."Tournament"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

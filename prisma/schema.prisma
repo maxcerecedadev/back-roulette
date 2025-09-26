@@ -9,8 +9,8 @@ datasource db {
 
 model User {
   id            String   @id @default(uuid())        
-  name          String  
-  externalToken String   @unique                     
+  name          String   @unique  
+  externalToken String   @unique                  
   balance       Float    
   lastLogin     DateTime? 
   createdAt     DateTime @default(now())
