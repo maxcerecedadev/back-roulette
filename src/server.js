@@ -10,6 +10,7 @@ import { singlePlayerHandler } from "#infra/ws/singlePlayerHandler.js";
 import { tournamentHandler } from "#infra/ws/tournamentHandler.js";
 import gameRoutes from "#infra/http/routes/gameRoutes.js";
 import { initGameManager, getRooms } from "./application/managers/gameManager.js";
+import { specs, swaggerUi } from "../docs/swagger.js";
 
 config();
 
@@ -29,6 +30,12 @@ const io = new SocketServer(server, {
 });
 
 app.use("/api/v1", gameRoutes);
+
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
+
+app.get("/", (req, res) => {
+  res.redirect("/api-docs");
+});
 
 io.on("connection", (socket) => {
   console.log("🔌 Nuevo cliente conectado:", socket.id);
@@ -77,6 +84,7 @@ async function startServer() {
 
     server.listen(PORT, () => {
       console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
+      console.log(`Swagger docs disponible en http://localhost:${PORT}/api-docs`);
       console.log(`📡 Socket.IO escuchando conexiones`);
     });
   } catch (error) {

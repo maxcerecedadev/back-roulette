@@ -67,6 +67,19 @@ flowchart TD
 `;
 }
 
+// --- Nuevo: Información de Swagger ---
+function addSwaggerInfo() {
+  return `
+## 📚 Documentación API
+
+- 🌐 **Swagger UI**: [http://localhost:2000/api-docs](http://localhost:2000/api-docs)
+- 🏷️ **Versión API**: 1.0.0
+- 📝 **Formato**: OpenAPI 3.0 (Swagger)
+- 🧾 **Anotaciones**: JSDoc en rutas HTTP
+- 👤 **Desarrollador**: Max Cereceda — [maxcereceda.com](https://maxcereceda.com)
+`;
+}
+
 // --- Main ---
 const rootDir = process.cwd();
 const pkg = readJSON(path.join(rootDir, "package.json"));
@@ -92,14 +105,13 @@ const readme = `
 
 ${pkg.description || "🎲 Backend estructurado con Clean Architecture para Ruleta y Torneos de Casino. Soporta API REST, comunicación WS y persistencia con Prisma ORM."}
 
-
 ---
 
 ## 🚀 Scripts disponibles
 
 ${
   Object.entries(scripts)
-    .map(([cmd, val]) => `- 📝 \`${cmd}\`: ${val}`)
+    .map(([cmd, val]) => "- 📝 `" + cmd + "`: " + val)
     .join("\n") || "No hay scripts definidos."
 }
 
@@ -110,14 +122,14 @@ ${
 - **Runtime**:
 ${
   Object.entries(dependencies)
-    .map(([dep, ver]) => `  - 📌 ${dep} ${ver}`)
+    .map(([dep, ver]) => "  - 📌 " + dep + " " + ver)
     .join("\n") || "  Ninguna"
 }
 
 - **Dev**:
 ${
   Object.entries(devDependencies)
-    .map(([dep, ver]) => `  - 🛠 ${dep} ${ver}`)
+    .map(([dep, ver]) => "  - 🛠 " + dep + " " + ver)
     .join("\n") || "  Ninguna"
 }
 
@@ -135,7 +147,13 @@ ${generateMermaid()}
 
 ## 📡 Endpoints HTTP
 
-${endpoints.length ? endpoints.map((e) => `- 🌍 ${e}`).join("\n") : "⚠️ No se detectaron endpoints."}
+${endpoints.length ? endpoints.map((e) => "- 🌍 " + e).join("\n") : "⚠️ No se detectaron endpoints."}
+
+---
+
+## 📚 Documentación API
+
+${addSwaggerInfo()}
 
 ---
 
@@ -187,11 +205,13 @@ ${handlers.length ? handlers.join("\n") : "⚠️ No se detectaron handlers."}
       </a>
       <br />
       🌐 <a href="https://maxcereceda.com/">maxcereceda.com</a><br />
-      🐙 <a href="https://github.com/maxcerecedadev">GitHub</a>
+      🐙 <a href="https://github.com/maxcerecedadev">GitHub</a><br />
+      📧 <a href="mailto:maxcerecedadev@gmail.com">Email</a><br />
+      📞 <a href="tel:+51967737252">WhatsApp</a>
     </td>
   </tr>
 </table>
 `;
 
-fs.writeFileSync(path.join(rootDir, "README.generated.md"), readme);
-console.log("✅ README.generated.md creado con bloque de autor al final");
+fs.writeFileSync(path.join(rootDir, "README.md"), readme);
+console.log("✅ README.md actualizado con documentación de Swagger y enlaces del autor");

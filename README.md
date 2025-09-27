@@ -30,9 +30,10 @@
   - 📌 date-fns-tz ^3.2.0
   - 📌 dotenv ^17.2.2
   - 📌 express ^4.19.2
-  - 📌 opossum ^9.0.0
   - 📌 prisma ^6.16.0
   - 📌 socket.io ^4.7.5
+  - 📌 swagger-jsdoc ^6.2.8
+  - 📌 swagger-ui-express ^5.0.1
   - 📌 uuid ^11.1.0
 
 - **Dev**:
@@ -41,7 +42,7 @@
   - 🛠 @types/express ^4.17.21
   - 🛠 @types/node ^20.14.9
   - 🛠 @types/socket.io ^3.0.2
-  - 🛠 eslint ^9.33.0
+  - 🛠 eslint ^9.36.0
   - 🛠 eslint-plugin-node ^11.1.0
   - 🛠 globals ^16.3.0
   - 🛠 jest ^30.1.3
@@ -106,6 +107,16 @@ flowchart TD
 
 ---
 
+## 📚 Documentación API
+
+- 🌐 **Swagger UI**: [http://localhost:2000/api-docs](http://localhost:2000/api-docs)
+- 🏷️ **Versión API**: 1.0.0
+- 📝 **Formato**: OpenAPI 3.0 (Swagger)
+- 🧾 **Anotaciones**: JSDoc en rutas HTTP
+- 👤 **Desarrollador**: Max Cereceda — [maxcereceda.com](https://maxcereceda.com)
+
+---
+
 ## 🎧 Handlers WS
 
 🎧 singlePlayerHandler
@@ -155,7 +166,9 @@ flowchart TD
       </a>
       <br />
       🌐 <a href="https://maxcereceda.com/">maxcereceda.com</a><br />
-      🐙 <a href="https://github.com/maxcerecedadev">GitHub</a>
+      🐙 <a href="https://github.com/maxcerecedadev">GitHub</a><br />
+      📧 <a href="mailto:maxcerecedadev@gmail.com">Email</a><br />
+      📞 <a href="tel:+51967737252">WhatsApp</a>
     </td>
   </tr>
 </table>

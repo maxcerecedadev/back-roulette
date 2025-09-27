@@ -1,5 +1,4 @@
 // src/infrastructure/http/routes/gameRoutes.js
-
 import axios from "axios";
 import { Router } from "express";
 import * as gameManager from "#app/managers/gameManager.js";
@@ -11,6 +10,31 @@ const router = Router();
 
 const API_BASE_URL = process.env.CASINO_API_BASE_URL;
 
+/**
+ * @swagger
+ * /status:
+ *   get:
+ *     summary: Obtiene el estado de una sala
+ *     tags: [Game (solo admins)]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: roomId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de la sala
+ *     responses:
+ *       200:
+ *         description: Estado de la sala
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *       404:
+ *         description: Sala no encontrada
+ */
 router.get("/status", adminAuth, (req, res) => {
   const { roomId } = req.query;
   const status = gameManager.getStatus(roomId);
@@ -24,6 +48,36 @@ router.get("/status", adminAuth, (req, res) => {
   res.json(status);
 });
 
+/**
+ * @swagger
+ * /peek/{roomId}:
+ *   get:
+ *     summary: Obtiene los resultados futuros de una sala 
+ *     tags: [Game (solo admins)]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: roomId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de la sala
+ *     responses:
+ *       200:
+ *         description: Resultados futuros
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 roomId:
+ *                   type: string
+ *                 nextResults:
+ *                   type: array
+ *       404:
+ *         description: Sala no encontrada
+ */
 router.get("/peek/:roomId", adminAuth, (req, res) => {
   const { roomId } = req.params;
   const results = gameManager.peekResults(roomId);
@@ -33,6 +87,34 @@ router.get("/peek/:roomId", adminAuth, (req, res) => {
   res.json({ roomId, nextResults: results });
 });
 
+/**
+ * @swagger
+ * /{roomId}:
+ *   delete:
+ *     summary: Elimina una sala
+ *     tags: [Game (solo admins)]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: roomId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de la sala
+ *     responses:
+ *       200:
+ *         description: Sala eliminada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       404:
+ *         description: Sala no encontrada
+ */
 router.delete("/:roomId", adminAuth, (req, res) => {
   const { roomId } = req.params;
 
@@ -45,6 +127,107 @@ router.delete("/:roomId", adminAuth, (req, res) => {
   res.json({ message: `Sala ${roomId} eliminada con éxito.` });
 });
 
+/**
+ * @swagger
+ * /rounds:
+ *   get:
+ *     summary: Obtiene historial de rondas de un jugador
+ *     tags: [Player]
+ *     parameters:
+ *       - in: query
+ *         name: playerId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID del jugador
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Límite de resultados
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Número de página
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Fecha inicial
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Fecha final
+ *       - in: query
+ *         name: result
+ *         schema:
+ *           type: string
+ *           enum: [win, lose, all]
+ *         description: Filtrar por resultado
+ *     responses:
+ *       200:
+ *         description: Historial de rondas
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     total:
+ *                       type: integer
+ *                     pages:
+ *                       type: integer
+ *                 rounds:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       roundId:
+ *                         type: string
+ *                       sessionId:
+ *                         type: string
+ *                       winningNumber:
+ *                         type: integer
+ *                       winningColor:
+ *                         type: string
+ *                       totalBetAmount:
+ *                         type: number
+ *                       totalWinnings:
+ *                         type: number
+ *                       netResult:
+ *                         type: number
+ *                       playerBalanceBefore:
+ *                         type: number
+ *                       playerBalanceAfter:
+ *                         type: number
+ *                       currency:
+ *                         type: string
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                       betResults:
+ *                         type: object
+ *       400:
+ *         description: Parámetro faltante
+ *       500:
+ *         description: Error interno
+ */
 router.get("/rounds", async (req, res) => {
   const { playerId, limit = 10, page = 1, startDate, endDate, result } = req.query;
 
@@ -120,6 +303,47 @@ router.get("/rounds", async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /auth/validate-token:
+ *   post:
+ *     summary: Valida token externo y crea/actualiza usuario
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               token:
+ *                 type: string
+ *                 description: Token externo
+ *           example:
+ *             token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *     responses:
+ *       200:
+ *         description: Usuario validado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 userId:
+ *                   type: string
+ *                 userName:
+ *                   type: string
+ *                 balance:
+ *                   type: number
+ *       400:
+ *         description: Token faltante
+ *       401:
+ *         description: Token inválido
+ *       500:
+ *         description: Error interno
+ */
 router.post("/auth/validate-token", async (req, res) => {
   const { token } = req.body;
 
@@ -217,6 +441,43 @@ router.post("/auth/validate-token", async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /tournament/create:
+ *   post:
+ *     summary: Crea un nuevo torneo
+ *     tags: [Tournament]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               maxPlayers:
+ *                 type: integer
+ *                 default: 3
+ *               maxRounds:
+ *                 type: integer
+ *                 default: 10
+ *     responses:
+ *       200:
+ *         description: Torneo creado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 tournamentId:
+ *                   type: string
+ *                 tournamentCode:
+ *                   type: string
+ *                 message:
+ *                   type: string
+ *       500:
+ *         description: Error interno
+ */
 router.post("/tournament/create", async (req, res) => {
   const { maxPlayers = 3, maxRounds = 10 } = req.body;
 
