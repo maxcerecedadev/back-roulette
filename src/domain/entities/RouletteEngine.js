@@ -4,17 +4,49 @@ import { BetValidator } from "#domain/value-objects/BetValidator.js";
 import { BetPayoutCalculator } from "#domain/value-objects/BetPayoutCalculator.js";
 import { BetLimits } from "#domain/value-objects/BetLimits.js";
 
+/**
+ * Motor principal de la ruleta que maneja la generación de números aleatorios,
+ * validación de apuestas y cálculo de pagos.
+ * Implementa una cola de resultados pregenerados para mayor transparencia.
+ */
 export class RouletteEngine {
+  /**
+   * Números rojos en la ruleta europea (18 números).
+   * Usado para determinar el color de los números ganadores.
+   */
   static RED_NUMBERS = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+  
+  /**
+   * Números negros en la ruleta europea (18 números).
+   * Usado para determinar el color de los números ganadores.
+   */
   static BLACK_NUMBERS = new Set([
     2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35,
   ]);
 
+  /**
+   * Claves de apuestas de columna (1ra, 2da, 3ra columna).
+   * Usado para validar combinaciones de apuestas.
+   */
   static COLUMN_BET_KEYS = ["column_1", "column_2", "column_3"];
+  
+  /**
+   * Claves de apuestas de docena (1ra, 2da, 3ra docena).
+   * Usado para validar combinaciones de apuestas.
+   */
   static DOZEN_BET_KEYS = ["dozen_1", "dozen_2", "dozen_3"];
+  
+  /**
+   * Apuestas que no pueden combinarse entre sí.
+   * Referencia a las apuestas conflictivas definidas en BetValidator.
+   */
   static CONFLICTING_BETS = BetValidator.CONFLICTING_BETS;
 
-  // 👇 MAPA DE TRADUCCIÓN: betKey → nombre amigable en español
+  /**
+   * Mapa de traducción de claves de apuesta a nombres amigables en español.
+   * Usado para mostrar mensajes de error más comprensibles al usuario.
+   * @type {Object<string, string>}
+   */
   static BET_KEY_NAMES = {
     even_money_red: "rojo",
     even_money_black: "negro",
@@ -67,7 +99,12 @@ export class RouletteEngine {
     straight_36: "número 36",
   };
 
-  // 👇 FUNCIÓN AUXILIAR: Reemplaza betKeys por nombres amigables en mensajes
+  /**
+   * Reemplaza las claves técnicas de apuestas por nombres amigables en mensajes.
+   * Útil para mostrar errores más comprensibles al usuario final.
+   * @param {string} message - Mensaje que puede contener claves de apuesta.
+   * @returns {string} Mensaje con nombres amigables en lugar de claves técnicas.
+   */
   static humanizeBetKeyInMessage(message) {
     if (!message || typeof message !== "string") return message;
 
@@ -80,7 +117,9 @@ export class RouletteEngine {
   }
 
   /**
-   * @param {number} queueSize
+   * Crea una nueva instancia del motor de ruleta.
+   * @param {number} [queueSize=10] - Tamaño de la cola de resultados pregenerados.
+   *   Una cola más grande proporciona mayor transparencia pero usa más memoria.
    */
   constructor(queueSize = 10) {
     this.queueSize = queueSize;
@@ -118,8 +157,9 @@ export class RouletteEngine {
   }
 
   /**
-   * Rellena la cola de resultados si es necesario.
-   * Se llama para mantener un número mínimo de resultados pregenerados.
+   * Rellena la cola de resultados hasta alcanzar el tamaño deseado.
+   * Garantiza que siempre haya resultados disponibles para mayor transparencia.
+   * Los resultados se generan de forma aleatoria y se almacenan para uso futuro.
    */
   fillQueue() {
     while (this.resultsQueue.length < this.queueSize) {
@@ -128,8 +168,9 @@ export class RouletteEngine {
   }
 
   /**
-   * Obtiene el próximo resultado de la cola y la rellena.
-   * @returns {object} El próximo resultado.
+   * Obtiene el próximo número ganador de la cola y la rellena automáticamente.
+   * Garantiza que siempre haya resultados disponibles y mantiene la cola llena.
+   * @returns {Object} Objeto con {number, color} del próximo resultado.
    */
   getNextWinningNumber() {
     if (this.resultsQueue.length === 0) this.fillQueue();
@@ -139,8 +180,9 @@ export class RouletteEngine {
   }
 
   /**
-   * Muestra los resultados futuros sin eliminarlos de la cola.
-   * @returns {Array<object>} Una copia de la cola de resultados.
+   * Muestra los próximos resultados sin eliminarlos de la cola.
+   * Útil para transparencia y debugging, no modifica el estado interno.
+   * @returns {Array<Object>} Copia de la cola de resultados {number, color}.
    */
   peekQueue() {
     return [...this.resultsQueue];
@@ -162,18 +204,18 @@ export class RouletteEngine {
   }
 
   /**
-   * ✅ NUEVO: Valida una apuesta con detalles (límites + combinaciones)
-   * @param {string} betKey
-   * @param {Map<string, number>} existingBets
-   * @param {number} newAmount
-   * @returns {{
-   *   allowed: boolean,
-   *   reasonCode?: string,
-   *   details?: any
-   * }}
+   * Valida una apuesta con información detallada sobre límites y combinaciones.
+   * Combina validación de límites de monto con validación de combinaciones lógicas.
+   * @param {string} betKey - Clave de la apuesta a validar.
+   * @param {Map<string, number>} existingBets - Apuestas existentes del jugador.
+   * @param {number} [newAmount=0] - Monto de la nueva apuesta (0 para solo validar combinaciones).
+   * @returns {Object} Resultado de la validación con detalles del error si aplica.
+   * @returns {boolean} returns.allowed - Si la apuesta es permitida.
+   * @returns {string} [returns.reasonCode] - Código de error si no es permitida.
+   * @returns {Object} [returns.details] - Detalles adicionales del error.
    */
   isBetAllowedDetailed(betKey, existingBets, newAmount = 0) {
-    // 1. Validar límites de apuesta (si se pasa newAmount)
+    // 1. Validar límites de monto por tipo de apuesta
     if (newAmount > 0) {
       const limitValidation = BetLimits.validateBetAmount(betKey, existingBets, newAmount);
       if (!limitValidation.allowed) {
@@ -185,10 +227,10 @@ export class RouletteEngine {
       }
     }
 
-    // 2. Validar combinaciones (conflictos, docenas/columnas, etc.)
+    // 2. Validar combinaciones lógicas (conflictos, docenas/columnas, etc.)
     const betValidation = BetValidator.isBetAllowedDetailed(betKey, existingBets);
     if (!betValidation.allowed) {
-      // Inferir reasonCode según contenido del mensaje
+      // Determinar el código de error basado en el contenido del mensaje
       let reasonCode = "BET_NOT_ALLOWED";
 
       if (betValidation.reason?.includes("cubriría")) {
@@ -206,7 +248,7 @@ export class RouletteEngine {
         reasonCode = "BET_CONFLICT";
       }
 
-      // 👇 HUMANIZAMOS EL MENSAJE antes de enviarlo
+      // Convertir claves técnicas a nombres amigables para el usuario
       const humanizedReason = this.constructor.humanizeBetKeyInMessage(betValidation.reason);
 
       return {
@@ -214,7 +256,7 @@ export class RouletteEngine {
         reasonCode,
         details: {
           betKey,
-          reason: humanizedReason, // ✅ Ahora en español amigable
+          reason: humanizedReason, 
           ...(betValidation.coverage && { coverage: betValidation.coverage }),
         },
       };
@@ -224,11 +266,13 @@ export class RouletteEngine {
   }
 
   /**
-   * Verifica si una apuesta nueva es permitida según las apuestas existentes.
+   * Verifica si una apuesta es permitida según las apuestas existentes (versión simple).
+   * Versión simplificada de isBetAllowedDetailed que solo retorna true/false.
    * @param {string} betKey - La clave de la apuesta a verificar.
    * @param {Map<string, number>} existingBets - Mapa de apuestas actuales del jugador.
-   * @returns {boolean} `true` si la apuesta es válida, `false` si hay conflicto con otras apuestas.
+   * @returns {boolean} `true` si la apuesta es válida, `false` si hay conflicto.
    */
+  
   isBetAllowed(betKey, existingBets) {
     const result = this.isBetAllowedDetailed(betKey, existingBets, 0);
     return result.allowed;

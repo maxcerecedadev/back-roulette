@@ -6,6 +6,13 @@ import { BetLimits } from "#domain/value-objects/BetLimits.js";
 import * as gameManager from "#app/managers/gameManager.js";
 import prisma from "#prisma";
 
+/**
+ * Sala de torneo para múltiples jugadores.
+ * Maneja el flujo completo de un torneo: inscripción, rondas, clasificación y premios.
+ * Los jugadores compiten por un premio basado en su rendimiento acumulado.
+ */
+
+// Estados del juego en un torneo
 const GAME_STATES = {
   BETTING: "betting",
   SPINNING: "spinning",
@@ -40,11 +47,21 @@ export class TournamentRoom {
     this.playablePot = 0; // 80% del totalPot → premio a repartir
   }
 
+  /**
+   * Envía un evento a todos los jugadores en la sala del torneo.
+   * @param {string} event - Nombre del evento.
+   * @param {Object} data - Datos a enviar.
+   */
   broadcast(event, data) {
     console.log(`📢 [broadcast] Emitiendo evento '${event}' a todos en sala ${this.id}`);
     this.server.to(this.id).emit(event, data);
   }
 
+  /**
+   * Obtiene el socket de un jugador específico.
+   * @param {string} playerId - ID del jugador.
+   * @returns {import("socket.io").Socket | null} Socket del jugador o null si no existe.
+   */
   getPlayerSocket(playerId) {
     const player = this.players.get(playerId);
     return player?.socket || null;
@@ -90,6 +107,11 @@ export class TournamentRoom {
     this.broadcast("tournament-state-update", this.getTournamentState());
   }
 
+  /**
+   * Inicia el torneo si se cumplen las condiciones.
+   * @param {string} creatorId - ID del jugador que intenta iniciar.
+   * @throws {Error} Si no es el creador, no hay suficientes jugadores o ya comenzó.
+   */
   startTournament(creatorId) {
     if (creatorId !== this.creatorId) {
       throw new Error("Solo el creador puede iniciar el torneo.");
@@ -302,7 +324,7 @@ export class TournamentRoom {
           playablePot: this.playablePot,
           houseCut: this.totalPot - this.playablePot,
           leftPlayers: Array.from(this.players.values())
-            .filter((p) => p.hasLeft || p.disconnected) // ✅ Incluye desconectados
+            .filter((p) => p.hasLeft || p.disconnected)
             .map((p) => ({ id: p.id, name: p.name })),
           message: "¡Torneo finalizado! Aquí están los resultados finales.",
         });
@@ -332,16 +354,12 @@ export class TournamentRoom {
             }
           });
 
-          // 🧹 LIMPIEZA DEFINITIVA: Eliminar todos los jugadores del Map
-          // → Esto evita que persistan en /status o en el manager
           this.players.clear();
           console.log(`🗑️ [Torneo] Todos los jugadores eliminados de la sala ${this.id}`);
 
-          // 🧹 Eliminar sala del gameManager
           gameManager.removeRoom(this.id);
           console.log(`🗑️ [Torneo] Sala ${this.id} eliminada del gameManager`);
 
-          // 🧹 Limpiar timers, bets, etc.
           this.destroy();
         }, 10000);
 
@@ -589,7 +607,6 @@ export class TournamentRoom {
       });
     }
 
-    // 1. Validar estado
     if (this.gameState !== GAME_STATES.BETTING) {
       const socket = this.getPlayerSocket(playerId);
       if (socket) emitErrorByKey(socket, "GAME_STATE_INVALID");
@@ -602,14 +619,12 @@ export class TournamentRoom {
       });
     }
 
-    // 2. Obtener jugador
     const player = this.players.get(playerId);
     if (!player) {
       console.warn(`⚠️ [place-bet] Jugador ${playerId} no encontrado en sala ${this.id}`);
       return callback?.({ success: false, message: "Jugador no encontrado." });
     }
 
-    // 3. Validar saldo (usar tournamentBalance, no balance)
     if (player.tournamentBalance < amount) {
       const socket = player.socket;
       if (socket) {
@@ -625,11 +640,9 @@ export class TournamentRoom {
       return callback?.({ success: false, message: "Saldo insuficiente." });
     }
 
-    // 4. Inicializar apuestas
     if (!this.bets.has(playerId)) this.bets.set(playerId, new Map());
     const playerBets = this.bets.get(playerId);
 
-    // 5. Validar apuesta
     let validation;
     if (playerBets.has(betKey)) {
       const limitValidation = BetLimits.validateBetAmount(betKey, playerBets, amount);
@@ -661,26 +674,22 @@ export class TournamentRoom {
       });
     }
 
-    // 6. Registrar apuesta
     const currentAmount = playerBets.get(betKey) || 0;
     playerBets.set(betKey, currentAmount + amount);
     player.tournamentBalance -= amount;
-    // 7. Actualizar lastBets
     if (!this.lastBets.has(playerId)) this.lastBets.set(playerId, new Map());
     const lastPlayerBets = this.lastBets.get(playerId);
     lastPlayerBets.set(betKey, (lastPlayerBets.get(betKey) || 0) + amount);
 
-    // 8. Calcular total apostado
     const betsArray = Array.from(playerBets, ([key, val]) => ({
       betKey: key,
       amount: val,
     }));
     const totalBet = betsArray.reduce((sum, bet) => sum + bet.amount, 0);
 
-    // 9. Emitir actualización
     if (player.socket) {
       player.socket.emit("tournament-bet-placed", {
-        newBalance: player.tournamentBalance, // ✅ Usar tournamentBalance
+        newBalance: player.tournamentBalance,
         bets: betsArray,
         totalBet,
       });
@@ -689,12 +698,10 @@ export class TournamentRoom {
       );
     }
 
-    // 10. Log de apuesta
     console.log(
       `🎲 [APUESTA] Ronda ${this.currentRound} - Jugador "${player.name}" (${playerId}) apostó $${amount} en "${betKey}". Nuevo balance de torneo: $${player.tournamentBalance}. Total apostado esta ronda: $${totalBet}`,
     );
 
-    // 11. Callback
     callback?.({ success: true, newBalance: player.tournamentBalance });
   }
 
@@ -867,8 +874,13 @@ export class TournamentRoom {
     return this.rouletteEngine.peekQueue().slice(0, count);
   }
 
-  // ✅ ✅ ✅ MÉTODOS AUXILIARES ASINCRONOS ✅ ✅ ✅
+  // =============== MÉTODOS AUXILIARES ASINCRONOS ===============
 
+  /**
+   * Simula la confirmación de apuestas en un torneo virtual.
+   * En torneos, las apuestas son virtuales y no requieren transacciones reales.
+   * @param {string} playerId - ID del jugador.
+   */
   async attemptPlaceBet(playerId) {
     const player = this.players.get(playerId);
     if (!player) {
@@ -889,10 +901,23 @@ export class TournamentRoom {
     );
   }
 
+  /**
+   * Simula el depósito de ganancias en un torneo virtual.
+   * En torneos, las ganancias son virtuales y se manejan internamente.
+   * @param {string} playerId - ID del jugador.
+   * @param {number} amount - Monto de ganancias.
+   */
   async attemptDepositWinnings(playerId, amount) {
     console.log(`✅ [TORNEO VIRTUAL] Ganancias simuladas para ${playerId}: ${amount} fichas`);
   }
 
+  /**
+   * Registra una transacción fallida en la base de datos para seguimiento.
+   * @param {string} playerId - ID del jugador.
+   * @param {string} type - Tipo de transacción (BET, WIN, etc.).
+   * @param {number} amount - Monto de la transacción.
+   * @param {Error} error - Error que causó la falla.
+   */
   async logFailedTransaction(playerId, type, amount, error) {
     try {
       await prisma.failedTransaction.create({

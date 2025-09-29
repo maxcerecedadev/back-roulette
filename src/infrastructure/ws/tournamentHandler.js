@@ -184,20 +184,41 @@ export const tournamentHandler = (io, socket) => {
   const betEvents = ["place-bet", "clear-bets", "undo-bet", "repeat-bet", "double-bet"];
 
   betEvents.forEach((event) => {
-    socket.on(`tournament-${event}`, (data) => {
+    socket.on(`tournament-${event}`, (data, callback) => {
       console.log(`📥 [BACKEND] Recibido evento: tournament-${event}`, data);
       const { roomId } = data;
       const room = gameManager.getRoom(roomId);
       const playerId = getPlayerId();
-      if (!room || !playerId) return;
+
+      if (!room || !playerId) {
+        if (callback) {
+          callback({ success: false, message: "Sala o jugador no encontrado" });
+        }
+        return;
+      }
 
       if (typeof room[event] === "function") {
         console.log(`🎰 [Torneo] Jugador ${playerId} ejecutó ${event} en sala ${roomId}`);
         try {
-          room[event](playerId, data);
+          room[event](playerId, data, callback);
         } catch (error) {
           console.error(`Error en tournament-${event}:`, error);
-          socket.emit("error", { message: error.message });
+          socket.emit("tournament-bet-error", {
+            betKey: data.betKey || "unknown",
+            message: error.message,
+          });
+          if (callback) {
+            callback({ success: false, message: error.message });
+          }
+        }
+      } else {
+        console.error(`❌ [BACKEND] Método ${event} no encontrado en el room`);
+        socket.emit("tournament-bet-error", {
+          betKey: data.betKey || "unknown",
+          message: `Método ${event} no implementado`,
+        });
+        if (callback) {
+          callback({ success: false, message: `Método ${event} no implementado` });
         }
       }
     });

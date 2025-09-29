@@ -1,8 +1,22 @@
 // src/domain/value-objects/BetValidator.js
 
+/**
+ * Validador de apuestas que implementa las reglas de la ruleta europea.
+ * Previene combinaciones absurdas, conflictos lógicos y exceso de cobertura.
+ * Garantiza que las apuestas cumplan con las reglas del casino.
+ */
 export class BetValidator {
+  /**
+   * Número máximo de casillas que un jugador puede cubrir simultáneamente.
+   * Evita que los jugadores hagan apuestas que cubran demasiados números.
+   */
   static MAX_COVERED_NUMBERS = 27;
 
+  /**
+   * Mapa que define qué números cubre cada tipo de apuesta.
+   * Usado para calcular la cobertura total y detectar combinaciones inválidas.
+   * @type {Map<string, Set<number>>}
+   */
   static BET_COVERAGE_SETS = new Map([
     ["straight_0", new Set([0])],
     ["straight_1", new Set([1])],
@@ -70,17 +84,36 @@ export class BetValidator {
     ],
   ]);
 
+  /**
+   * Apuestas que no pueden combinarse entre sí por ser mutuamente excluyentes.
+   * Cada par representa apuestas que cubren el mismo rango de números.
+   * @type {Array<Array<string>>}
+   */
   static CONFLICTING_BETS = [
     ["even_money_red", "even_money_black"],
     ["even_money_even", "even_money_odd"],
     ["even_money_low", "even_money_high"],
   ];
 
+  /**
+   * Claves de apuestas de columna para validación de combinaciones.
+   * @type {Array<string>}
+   */
   static COLUMN_BET_KEYS = ["column_1", "column_2", "column_3"];
+  
+  /**
+   * Claves de apuestas de docena para validación de combinaciones.
+   * @type {Array<string>}
+   */
   static DOZEN_BET_KEYS = ["dozen_1", "dozen_2", "dozen_3"];
 
   // =============== MÉTODOS AUXILIARES ===============
 
+  /**
+   * Calcula el conjunto de números cubiertos por las apuestas existentes.
+   * @param {Map<string, number>} existingBets - Apuestas actuales del jugador.
+   * @returns {Set<number>} Conjunto de números cubiertos.
+   */
   static getCoveredNumbers(existingBets) {
     const coveredNumbers = new Set();
     for (const betKey of existingBets.keys()) {
@@ -92,6 +125,12 @@ export class BetValidator {
     return coveredNumbers;
   }
 
+  /**
+   * Valida si agregar una nueva apuesta excedería el límite de cobertura.
+   * @param {string} newBetKey - Clave de la nueva apuesta.
+   * @param {Map<string, number>} existingBets - Apuestas existentes.
+   * @returns {Object} Resultado de la validación con información detallada.
+   */
   static validateCoverageLimit(newBetKey, existingBets) {
     const currentCoverage = this.getCoveredNumbers(existingBets);
     const newBetNumbers = this.BET_COVERAGE_SETS.get(newBetKey)?.size || 0;
@@ -104,8 +143,15 @@ export class BetValidator {
     };
   }
 
+  /**
+   * Detecta combinaciones de apuestas que no tienen sentido lógico.
+   * Por ejemplo: apostar a las 3 docenas, 3 columnas, o rangos opuestos.
+   * @param {string} newBetKey - Clave de la nueva apuesta.
+   * @param {Map<string, number>} existingBets - Apuestas existentes.
+   * @returns {Object} Resultado de la detección con razón si es inválida.
+   */
   static detectNonsensicalCombinations(newBetKey, existingBets) {
-    // Creamos copia con la nueva apuesta
+    // Simular la combinación completa incluyendo la nueva apuesta
     const allBets = new Map(existingBets);
     allBets.set(newBetKey, 1);
 
@@ -148,6 +194,7 @@ export class BetValidator {
       };
     }
 
+    // Verificar combinaciones complejas que exceden el límite de cobertura
     const dozenCount = this.DOZEN_BET_KEYS.filter((key) => betKeys.includes(key)).length;
     const columnCount = this.COLUMN_BET_KEYS.filter((key) => betKeys.includes(key)).length;
 
@@ -168,10 +215,10 @@ export class BetValidator {
   // =============== MÉTODOS PÚBLICOS ===============
 
   /**
-   * Valida si una nueva apuesta es permitida en combinación con las apuestas existentes.
-   * @param {string} betKey La clave de la nueva apuesta.
-   * @param {Map<string, number>} existingBets Las apuestas que el jugador ya ha hecho.
-   * @returns {boolean} `true` si la apuesta es válida, `false` si hay un conflicto.
+   * Valida si una nueva apuesta es permitida (versión simple).
+   * @param {string} betKey - La clave de la nueva apuesta.
+   * @param {Map<string, number>} existingBets - Las apuestas existentes del jugador.
+   * @returns {boolean} `true` si la apuesta es válida, `false` si hay conflicto.
    */
   static isBetAllowed(betKey, existingBets) {
     const result = this.isBetAllowedDetailed(betKey, existingBets);
@@ -179,13 +226,16 @@ export class BetValidator {
   }
 
   /**
-   * Versión detallada: devuelve razón y cobertura si falla.
-   * @param {string} newBetKey
-   * @param {Map<string, number>} existingBets
-   * @returns {Object} { allowed: boolean, reason?: string, coverage?: Object }
+   * Valida una apuesta con información detallada sobre el resultado.
+   * @param {string} newBetKey - Clave de la nueva apuesta.
+   * @param {Map<string, number>} existingBets - Apuestas existentes del jugador.
+   * @returns {Object} Resultado detallado de la validación.
+   * @returns {boolean} returns.allowed - Si la apuesta es permitida.
+   * @returns {string} [returns.reason] - Razón del rechazo si no es permitida.
+   * @returns {Object} [returns.coverage] - Información sobre cobertura de números.
    */
   static isBetAllowedDetailed(newBetKey, existingBets) {
-    // 1. Validar conflictos directos
+    // 1. Verificar conflictos directos (apuestas mutuamente excluyentes)
     for (const pair of this.CONFLICTING_BETS) {
       if (pair.includes(newBetKey)) {
         const conflictingBet = pair.find((key) => key !== newBetKey);
@@ -198,7 +248,7 @@ export class BetValidator {
       }
     }
 
-    // 2. Validar combinación docenas/columnas
+    // 2. Verificar combinación de docenas y columnas (no permitida)
     const isNewBetColumn = this.COLUMN_BET_KEYS.includes(newBetKey);
     const isNewBetDozen = this.DOZEN_BET_KEYS.includes(newBetKey);
     const hasExistingColumnBet = this.COLUMN_BET_KEYS.some((key) => existingBets.has(key));
@@ -211,13 +261,13 @@ export class BetValidator {
       };
     }
 
-    // 3. Validar combinaciones absurdas
+    // 3. Verificar combinaciones que no tienen sentido lógico
     const nonsensicalCheck = this.detectNonsensicalCombinations(newBetKey, existingBets);
     if (nonsensicalCheck.hasNonsensicalCombination) {
       return { allowed: false, reason: nonsensicalCheck.reason };
     }
 
-    // 4. Validar límite de cobertura
+    // 4. Verificar límite de cobertura de números
     const coverageCheck = this.validateCoverageLimit(newBetKey, existingBets);
     if (!coverageCheck.isValid) {
       return {
@@ -231,7 +281,7 @@ export class BetValidator {
       };
     }
 
-    // ✅ Todo OK
+    // ✅ Todas las validaciones pasaron
     return {
       allowed: true,
       coverage: {

@@ -3,13 +3,20 @@
 import { SinglePlayerRoom } from "#domain/entities/SinglePlayerRoom.js";
 import { TournamentRoom } from "#domain/entities/TournamentRoom.js";
 
+/**
+ * Gestor central de salas de juego.
+ * Maneja la creación, eliminación y consulta de salas de un jugador y torneos.
+ * Proporciona una interfaz unificada para el manejo de todas las salas activas.
+ */
+
+// Instancia global de Socket.IO para comunicación con clientes
 let ioInstance = null;
 
 /**
- * Inicializa el GameManager con la instancia de Socket.IO
- * @param {import("socket.io").Server} io
+ * Inicializa el GameManager con la instancia de Socket.IO.
+ * Debe ser llamado una sola vez al iniciar la aplicación.
+ * @param {import("socket.io").Server} io - Instancia de Socket.IO para comunicación.
  */
-
 export const initGameManager = (io) => {
   if (ioInstance) {
     throw new Error("GameManager ya fue inicializado");
@@ -19,9 +26,10 @@ export const initGameManager = (io) => {
 };
 
 /**
- * Obtiene la instancia de Socket.IO (solo para uso interno)
+ * Obtiene la instancia de Socket.IO (solo para uso interno).
+ * @returns {import("socket.io").Server} Instancia de Socket.IO.
+ * @throws {Error} Si el GameManager no ha sido inicializado.
  */
-
 const getIO = () => {
   if (!ioInstance) {
     throw new Error("GameManager no ha sido inicializado. Llama a initGameManager(io) primero.");
@@ -37,15 +45,16 @@ const ROOM_TYPES = [
   { name: "single", map: singleRooms },
 ];
 
-// Notificar a admins cuando cambie el estado global ===
-/**
- * Emite el estado actual de todas las salas a los clientes admin.
- */
+// =============== NOTIFICACIONES A ADMINISTRADORES ===============
 
+/**
+ * Notifica a los administradores sobre cambios en el estado de las salas.
+ * Emite el estado actual de todas las salas a los clientes conectados como admin.
+ */
 export const notifyAdminsRoomUpdate = () => {
   try {
     const io = getIO();
-    const status = getRooms(); // obtiene el estado actual
+    const status = getRooms();
     io.to("admin-room").emit("admin:rooms-update", status);
     console.log(`📡 [Admin] Evento 'admin:rooms-update' emitido a room 'admin-room'`);
   } catch (err) {
@@ -53,13 +62,14 @@ export const notifyAdminsRoomUpdate = () => {
   }
 };
 
-/**
- * Obtiene o crea una sala de un solo jugador.
- * @param {string} roomId - El ID de la sala.
- * @param {object} io - La instancia de Socket.IO.
- * @returns {SinglePlayerRoom} La instancia de la sala.
- */
+// =============== GESTIÓN DE SALAS ===============
 
+/**
+ * Obtiene una sala de un solo jugador existente o crea una nueva.
+ * @param {string} roomId - ID único de la sala.
+ * @param {import("socket.io").Server} io - Instancia de Socket.IO.
+ * @returns {SinglePlayerRoom} Instancia de la sala (existente o nueva).
+ */
 export const getOrCreateSingleRoom = (roomId, io) => {
   if (!singleRooms.has(roomId)) {
     const newRoom = new SinglePlayerRoom(io, roomId);
@@ -73,13 +83,12 @@ export const getOrCreateSingleRoom = (roomId, io) => {
 };
 
 /**
- * Obtiene o crea una sala de torneo.
- * @param {string} roomId - El ID de la sala.
- * @param {object} io - La instancia de Socket.IO.
- * @param {string} creatorId - ID del creador de la sala.
- * @returns {TournamentRoom} La instancia de la sala.
+ * Obtiene una sala de torneo existente o crea una nueva.
+ * @param {string} roomId - ID único de la sala.
+ * @param {import("socket.io").Server} io - Instancia de Socket.IO.
+ * @param {string} creatorId - ID del jugador que crea la sala.
+ * @returns {TournamentRoom} Instancia de la sala (existente o nueva).
  */
-
 export const getOrCreateTournamentRoom = (roomId, io, creatorId) => {
   if (!tournamentRooms.has(roomId)) {
     const newRoom = new TournamentRoom(io, roomId, creatorId);
@@ -93,11 +102,10 @@ export const getOrCreateTournamentRoom = (roomId, io, creatorId) => {
 };
 
 /**
- * Elimina una sala por su ID.
- * @param {string} roomId - El ID de la sala.
- * @returns {boolean} True si la sala fue eliminada, false de lo contrario.
+ * Elimina una sala por su ID y limpia todos sus recursos.
+ * @param {string} roomId - ID de la sala a eliminar.
+ * @returns {boolean} `true` si la sala fue eliminada, `false` si no se encontró.
  */
-
 export const removeRoom = (roomId) => {
   for (const { name, map } of ROOM_TYPES) {
     if (map.has(roomId)) {
@@ -132,10 +140,9 @@ export const removeRoom = (roomId) => {
 
 /**
  * Obtiene una sala existente por su ID.
- * @param {string} roomId - El ID de la sala.
- * @returns {SinglePlayerRoom | TournamentRoom | undefined} La instancia de la sala o undefined si no se encuentra.
+ * @param {string} roomId - ID de la sala a buscar.
+ * @returns {SinglePlayerRoom | TournamentRoom | undefined} Instancia de la sala o `undefined` si no se encuentra.
  */
-
 export const getRoom = (roomId) => {
   for (const { map } of ROOM_TYPES) {
     if (map.has(roomId)) {
@@ -147,9 +154,8 @@ export const getRoom = (roomId) => {
 
 /**
  * Obtiene el estado de todas las salas activas.
- * @returns {Array<object>} Un array con los detalles de cada sala.
+ * @returns {Array<Object>} Array con los detalles de cada sala activa.
  */
-
 export const getRooms = () => {
   const allRooms = [...singleRooms.values(), ...tournamentRooms.values()];
   return allRooms.map((room) => {
@@ -171,11 +177,10 @@ export const getRooms = () => {
 };
 
 /**
- * Obtiene el estado de una sala específica.
- * @param {string} roomId - El ID de la sala a buscar.
- * @returns {object | null} El estado de la sala o null si no se encuentra.
+ * Obtiene el estado detallado de una sala específica.
+ * @param {string} roomId - ID de la sala a consultar.
+ * @returns {Object | null} Estado de la sala o `null` si no se encuentra.
  */
-
 export const getStatus = (roomId) => {
   if (!roomId) return getRooms();
 
@@ -205,11 +210,10 @@ export const getStatus = (roomId) => {
 };
 
 /**
- * Devuelve los próximos 20 resultados de la sala (sin sacarlos de la cola).
- * @param {string} roomId - El ID de la sala.
- * @returns {Array<object>} Array de resultados {number, color}.
+ * Obtiene los próximos resultados de la ruleta sin eliminarlos de la cola.
+ * @param {string} roomId - ID de la sala.
+ * @returns {Array<Object> | null} Array de resultados {number, color} o `null` si no se encuentra la sala.
  */
-
 export function peekResults(roomId) {
   const room = getRoom(roomId);
   if (!room) return null;
@@ -217,15 +221,21 @@ export function peekResults(roomId) {
 }
 
 /**
- * Para debugging o herramientas de admin, expón los IDs, no los objetos.
- * @returns {object} Lista de IDs de salas por tipo.
+ * Obtiene solo los IDs de las salas para herramientas de administración.
+ * Útil para debugging sin exponer objetos completos.
+ * @returns {Object} Lista de IDs de salas por tipo.
  */
-
 export const getRoomsForAdmin = () => ({
   single: Array.from(singleRooms.keys()),
   tournament: Array.from(tournamentRooms.keys()),
 });
 
+/**
+ * Notifica a los administradores sobre cambios en el balance de un jugador.
+ * @param {string} roomId - ID de la sala donde ocurrió el cambio.
+ * @param {string} playerId - ID del jugador cuyo balance cambió.
+ * @param {number} balance - Nuevo balance del jugador.
+ */
 export const notifyAdminPlayerBalanceUpdate = (roomId, playerId, balance) => {
   try {
     const io = getIO();

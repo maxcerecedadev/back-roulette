@@ -7,6 +7,13 @@ import prisma from "#prisma";
 import { CasinoApiService } from "#infra/api/casinoApiService.js";
 import * as gameManager from "#app/managers/gameManager.js";
 
+/**
+ * Sala de juego individual para un solo jugador.
+ * Maneja el flujo completo de una partida de ruleta: apuestas, giro, pagos.
+ * Integra con servicios externos para transacciones reales.
+ */
+
+// Estados del juego en una sala individual
 const GAME_STATES = {
   BETTING: "betting",
   SPINNING: "spinning",
@@ -14,6 +21,11 @@ const GAME_STATES = {
 };
 
 export class SinglePlayerRoom {
+  /**
+   * Crea una nueva sala de juego individual.
+   * @param {import("socket.io").Server} io - Instancia de Socket.IO para comunicación.
+   * @param {string} roomId - ID único de la sala.
+   */
   constructor(io, roomId) {
     this.server = io;
     this.id = roomId;
@@ -30,6 +42,11 @@ export class SinglePlayerRoom {
     this.gameManager = gameManager;
   }
 
+  /**
+   * Envía un evento a todos los jugadores en la sala.
+   * @param {string} event - Nombre del evento.
+   * @param {Object} data - Datos a enviar.
+   */
   broadcast(event, data) {
     console.log(event);
     console.log(data);
@@ -37,11 +54,22 @@ export class SinglePlayerRoom {
     this.server.to(this.id).emit(event, data);
   }
 
+  /**
+   * Obtiene el socket de un jugador específico.
+   * @param {string} playerId - ID del jugador.
+   * @returns {import("socket.io").Socket | null} Socket del jugador o null si no existe.
+   */
   getPlayerSocket(playerId) {
     const player = this.players.get(playerId);
     return player?.socket || null;
   }
 
+  /**
+   * Agrega un jugador a la sala individual.
+   * @param {Player} player - Instancia del jugador.
+   * @param {import("socket.io").Socket} socket - Socket de conexión del jugador.
+   * @throws {Error} Si la sala ya tiene un jugador.
+   */
   addPlayer(player, socket) {
     if (this.players.size >= 1) throw new Error("Esta sala es solo para un jugador.");
     player.socket = socket;
@@ -56,16 +84,29 @@ export class SinglePlayerRoom {
     });
   }
 
+  /**
+   * Remueve un jugador de la sala.
+   * @param {string} playerId - ID del jugador a remover.
+   */
   removePlayer(playerId) {
     if (this.players.has(playerId)) {
       this.players.delete(playerId);
     }
   }
 
+  /**
+   * Obtiene un jugador por su ID.
+   * @param {string} playerId - ID del jugador.
+   * @returns {Player | undefined} Instancia del jugador o undefined si no existe.
+   */
   getPlayer(playerId) {
     return this.players.get(playerId);
   }
 
+  /**
+   * Inicia el contador de tiempo para el juego.
+   * En modo manual, solo cuenta hacia atrás pero no cambia estados automáticamente.
+   */
   startCountdown() {
     this.countdownInterval = setInterval(() => {
       if (!this.manualMode || this.gameState !== GAME_STATES.BETTING) {
@@ -81,19 +122,34 @@ export class SinglePlayerRoom {
     }, 1000);
   }
 
+  /**
+   * Detiene el contador de tiempo.
+   */
   stopCountdown() {
     clearInterval(this.countdownInterval);
   }
 
+  /**
+   * Activa o desactiva el modo manual del juego.
+   * @param {boolean} value - true para modo manual, false para automático.
+   */
   setManualMode(value) {
     this.manualMode = value;
   }
 
+  /**
+   * Activa manualmente el giro de la ruleta.
+   * Solo funciona si el juego está en estado SPINNING.
+   */
   triggerSpin() {
     if (this.gameState !== GAME_STATES.SPINNING) return;
     this.spinWheel();
   }
 
+  /**
+   * Avanza al siguiente estado del juego.
+   * Maneja la transición entre BETTING -> SPINNING -> PAYOUT -> BETTING.
+   */
   nextState() {
     this.stopCountdown();
 
@@ -140,6 +196,10 @@ export class SinglePlayerRoom {
     }
   }
 
+  /**
+   * Ejecuta el giro de la ruleta y anuncia el resultado.
+   * El resultado se obtiene de la cola pregenerada del motor.
+   */
   spinWheel() {
     this.winningNumber = this.rouletteEngine.getNextWinningNumber();
     this.broadcast("game-state-update", {
@@ -150,6 +210,11 @@ export class SinglePlayerRoom {
     setTimeout(() => this.nextState(), 6000);
   }
 
+  /**
+   * Procesa los pagos para todos los jugadores basado en el número ganador.
+   * Calcula ganancias, actualiza balances y registra transacciones.
+   * @param {{number: number, color: string}} winningNumber - Número y color ganador.
+   */
   processPayout(winningNumber) {
     this.players.forEach((player, playerId) => {
       const playerBets = this.bets.get(playerId) || new Map();
@@ -204,6 +269,7 @@ export class SinglePlayerRoom {
       const totalNetResult = totalWinnings - totalBetAmount;
       let resultStatus = playerBets.size === 0 ? "no_bet" : totalWinnings > 0 ? "win" : "lose";
 
+      // Crear payload con resultados detallados
       const payload = {
         state: "payout",
         winningNumber: winningNumber.number,
@@ -232,6 +298,7 @@ export class SinglePlayerRoom {
       this.lastBets.set(playerId, new Map(playerBets));
       this.bets.set(playerId, new Map());
 
+      // Preparar datos para guardar en base de datos
       const balanceBefore = balanceAfterPayout - totalWinnings + totalBetAmount;
 
       const roundData = {
@@ -254,6 +321,7 @@ export class SinglePlayerRoom {
         description: `Ronda finalizada. Número: ${winningNumber.number}, Color: ${winningNumber.color}`,
       };
 
+      // Guardar ronda en base de datos
       prisma.rouletteRound
         .create({ data: roundData })
         .then(() => {
@@ -275,6 +343,14 @@ export class SinglePlayerRoom {
     setTimeout(() => this.nextState(), 5000);
   }
 
+  /**
+   * Registra una nueva apuesta para un jugador.
+   * @param {string} playerId - ID del jugador.
+   * @param {string} betKey - Clave de la apuesta.
+   * @param {number} amount - Monto a apostar.
+   * @param {Function} callback - Función de retorno.
+   * @param {boolean} [isIncreaseOnly=false] - Si es true, solo valida límites, no combinaciones.
+   */
   placeBet(playerId, betKey, amount, callback, isIncreaseOnly = false) {
     if (this.gameState !== GAME_STATES.BETTING) {
       const socket = this.getPlayerSocket(playerId);
@@ -632,8 +708,12 @@ export class SinglePlayerRoom {
     return result;
   }
 
-  // ✅ ✅ ✅ MÉTODOS AUXILIARES ASINCRONOS ✅ ✅ ✅
+  // =============== MÉTODOS AUXILIARES ASINCRONOS ===============
 
+  /**
+   * Confirma las apuestas de un jugador con el servicio externo de casino.
+   * @param {string} playerId - ID del jugador.
+   */
   async attemptPlaceBet(playerId) {
     const player = this.players.get(playerId);
     if (!player) return;
@@ -652,6 +732,12 @@ export class SinglePlayerRoom {
     }
   }
 
+  /**
+   * Deposita las ganancias de un jugador en el servicio externo de casino.
+   * @param {string} playerId - ID del jugador.
+   * @param {number} amount - Monto a depositar.
+   * @param {string} ip - Dirección IP del jugador.
+   */
   async attemptDepositWinnings(playerId, amount, ip) {
     try {
       await CasinoApiService.depositWinnings(playerId, amount, ip);
@@ -662,6 +748,13 @@ export class SinglePlayerRoom {
     }
   }
 
+  /**
+   * Registra una transacción fallida en la base de datos para seguimiento.
+   * @param {string} playerId - ID del jugador.
+   * @param {string} type - Tipo de transacción (BET, WIN, etc.).
+   * @param {number} amount - Monto de la transacción.
+   * @param {Error} error - Error que causó la falla.
+   */
   async logFailedTransaction(playerId, type, amount, error) {
     try {
       await prisma.failedTransaction.create({

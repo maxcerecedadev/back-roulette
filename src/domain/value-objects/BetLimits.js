@@ -1,21 +1,32 @@
 // src/domain/value-objects/BetLimits.js
 
+/**
+ * Gestor de límites de apuestas por tipo.
+ * Define los montos máximos permitidos para cada tipo de apuesta en la ruleta.
+ * Previene apuestas excesivas que podrían comprometer la estabilidad del casino.
+ */
 export class BetLimits {
+  /**
+   * Límites máximos de apuesta por tipo en fichas.
+   * Estos límites protegen al casino de pérdidas excesivas y mantienen el juego equilibrado.
+   * @type {Object<string, number>}
+   */
   static MAX_BETS = {
-    straight: 10000, // directa
-    split: 20000, // dividida
-    corner: 40000, // de esquina
-    column: 50000, // de columna
-    dozen: 50000, // de docena
-    even_money: 100000, // de dinero par
+    straight: 10000, // Apuesta directa a un número (35:1)
+    split: 20000, // Apuesta dividida entre dos números (17:1)
+    corner: 40000, // Apuesta de esquina a 4 números (8:1)
+    column: 50000, // Apuesta de columna (2:1)
+    dozen: 50000, // Apuesta de docena (2:1)
+    even_money: 100000, // Apuestas de dinero par (1:1)
   };
 
   /**
-   * Obtiene el límite máximo para un tipo de apuesta según su betKey.
-   * @param {string} betKey - Ej: "straight_17", "even_money_red", "column_1"
-   * @returns {number} - Límite máximo permitido
+   * Obtiene el límite máximo para un tipo de apuesta según su clave.
+   * @param {string} betKey - Clave de la apuesta (ej: "straight_17", "even_money_red", "column_1")
+   * @returns {number} Límite máximo permitido en fichas para este tipo de apuesta.
    */
   static getMaxBetForType(betKey) {
+    // Determinar el tipo de apuesta basado en el prefijo de la clave
     if (betKey.startsWith("straight_")) return this.MAX_BETS.straight;
     if (betKey.startsWith("split_")) return this.MAX_BETS.split;
     if (betKey.startsWith("corner_")) return this.MAX_BETS.corner;
@@ -28,9 +39,9 @@ export class BetLimits {
   }
 
   /**
-   * Devuelve un nombre amigable para mostrar al usuario según el tipo de apuesta.
-   * @param {string} betKey - Ej: "straight_17", "even_money_red"
-   * @returns {string} - Nombre legible
+   * Convierte una clave de apuesta en un nombre amigable para mostrar al usuario.
+   * @param {string} betKey - Clave de la apuesta (ej: "straight_17", "even_money_red")
+   * @returns {string} Nombre legible del tipo de apuesta en español.
    */
   static getBetTypeName(betKey) {
     if (betKey.startsWith("straight_")) return "apuesta directa";
@@ -43,11 +54,15 @@ export class BetLimits {
   }
 
   /**
-   * Valida si el monto total propuesto (existente + nuevo) excede el límite.
-   * @param {string} betKey
-   * @param {Map<string, number>} existingBets - Mapa de apuestas actuales del jugador
-   * @param {number} newAmount - Monto que se quiere apostar ahora
-   * @returns {{ allowed: boolean, maxAllowed?: number, currentAmount?: number, proposedTotal?: number }}
+   * Valida si el monto total propuesto excede el límite permitido para el tipo de apuesta.
+   * @param {string} betKey - Clave de la apuesta a validar.
+   * @param {Map<string, number>} existingBets - Apuestas actuales del jugador.
+   * @param {number} newAmount - Monto que se quiere apostar adicionalmente.
+   * @returns {Object} Resultado de la validación con detalles del error si aplica.
+   * @returns {boolean} returns.allowed - Si el monto es permitido.
+   * @returns {number} [returns.maxAllowed] - Límite máximo permitido.
+   * @returns {number} [returns.currentAmount] - Monto actual ya apostado.
+   * @returns {number} [returns.proposedTotal] - Total propuesto (actual + nuevo).
    */
   static validateBetAmount(betKey, existingBets, newAmount) {
     const maxAllowed = this.getMaxBetForType(betKey);
