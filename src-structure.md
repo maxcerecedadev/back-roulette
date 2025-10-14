@@ -4,6 +4,7 @@
   - 📂 managers
     - 📄 gameManager.js
     - 📄 index.js
+    - 📄 userManager.js
 - 📂 domain
   - 📂 entities
     - 📄 Player.js
@@ -22,6 +23,8 @@
       - 📄 adminAuth.js
     - 📂 routes
       - 📄 gameRoutes.js
+      - 📄 index.js
+      - 📄 userRoutes.js
   - 📂 ws
     - 📄 singlePlayerHandler.js
     - 📄 tournamentHandler.js

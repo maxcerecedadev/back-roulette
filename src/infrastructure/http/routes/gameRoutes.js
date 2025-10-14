@@ -15,7 +15,7 @@ const API_BASE_URL = process.env.CASINO_API_BASE_URL;
  * /status:
  *   get:
  *     summary: Obtiene el estado de una sala
- *     tags: [Game (solo admins)]
+ *     tags: [Game Management]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -53,7 +53,7 @@ router.get("/status", adminAuth, (req, res) => {
  * /peek/{roomId}:
  *   get:
  *     summary: Obtiene los resultados futuros de una sala 
- *     tags: [Game (solo admins)]
+ *     tags: [Game Management]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -92,7 +92,7 @@ router.get("/peek/:roomId", adminAuth, (req, res) => {
  * /{roomId}:
  *   delete:
  *     summary: Elimina una sala
- *     tags: [Game (solo admins)]
+ *     tags: [Game Management]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -446,7 +446,7 @@ router.post("/auth/validate-token", async (req, res) => {
  * /tournament/create:
  *   post:
  *     summary: Crea un nuevo torneo
- *     tags: [Tournament]
+ *     tags: [Player]
  *     requestBody:
  *       content:
  *         application/json:

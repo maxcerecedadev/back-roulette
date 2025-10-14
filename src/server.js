@@ -8,7 +8,7 @@ import { config } from "dotenv";
 import prisma from "#prisma";
 import { singlePlayerHandler } from "#infra/ws/singlePlayerHandler.js";
 import { tournamentHandler } from "#infra/ws/tournamentHandler.js";
-import gameRoutes from "#infra/http/routes/gameRoutes.js";
+import routes from "#infra/http/routes/index.js";
 import { initGameManager, getRooms } from "./application/managers/gameManager.js";
 import { specs, swaggerUi } from "../docs/swagger.js";
 
@@ -35,7 +35,7 @@ const io = new SocketServer(server, {
   },
 });
 
-app.use("/api/v1", gameRoutes);
+app.use("/api/v1", routes);
 
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
 
