@@ -37,7 +37,7 @@ const mapGameStateToTournamentStatus = (gameState, playersSize) => {
 };
 
 export class TournamentRoom {
-  constructor(io, roomId, creatorId, entryFee) {
+  constructor(io, roomId, creatorId, entryFee, code) {
     this.server = io;
     this.id = roomId;
     this.creatorId = creatorId;
@@ -60,6 +60,9 @@ export class TournamentRoom {
     this.houseCutPercentage = 0.2; // 20% para la casa
     this.totalPot = 0; // Acumulado de inscripciones
     this.playablePot = 0; // 80% del totalPot → premio a repartir
+
+    this.code = code;
+    this.createdAt = new Date();
   }
 
   /**
@@ -67,19 +70,18 @@ export class TournamentRoom {
    * @returns {Object} Información pública del torneo.
    */
   getPublicInfo() {
-    const code = this.code || this.id;
     return {
       id: this.id,
-      code: code,
+      code: this.code,
       players: this.players.size,
       maxPlayers: 3,
-      createdAt: this.createdAt || new Date(),
+      createdAt: this.createdAt,
       status: mapGameStateToTournamentStatus(this.gameState, this.players.size),
       isStarted: this.isStarted,
       currentRound: this.currentRound,
       maxRounds: this.maxRounds,
       gameState: this.gameState,
-      entryFee: this.entryFee,
+      entryChips: this.entryFee,
     };
   }
 

@@ -121,10 +121,17 @@ router.delete("/:roomId", adminAuth, (req, res) => {
   const wasRemoved = gameManager.removeRoom(roomId);
 
   if (!wasRemoved) {
-    return res.status(404).json({ error: "Sala no encontrada." });
+    return res.status(404).json({
+      error: "Sala no encontrada.",
+      roomId,
+    });
   }
 
-  res.json({ message: `Sala ${roomId} eliminada con éxito.` });
+  res.json({
+    message: `Sala ${roomId} eliminada con éxito.`,
+    roomId,
+    success: true,
+  });
 });
 
 /**
@@ -545,7 +552,7 @@ router.post("/tournament/create", async (req, res) => {
         rounds: maxRounds,
         currentRound: 0,
         maxPlayers,
-        status: "WAITING",
+        status: "waiting",
         results: [],
         createdAt: now,
         entryFee,

@@ -1,5 +1,4 @@
 // src/application/managers/gameManager.js
-
 import { SinglePlayerRoom } from "#domain/entities/SinglePlayerRoom.js";
 import { TournamentRoom } from "#domain/entities/TournamentRoom.js";
 
@@ -88,14 +87,15 @@ export const getOrCreateSingleRoom = (roomId, io) => {
  * @param {import("socket.io").Server} io - Instancia de Socket.IO.
  * @param {string} creatorId - ID del jugador que crea la sala.
  * @param {number} entryFee - Costo de entrada del torneo.
+ * @param {string} code - Código amigable del torneo (T_XXXXXX_XXX).
  * @returns {TournamentRoom} Instancia de la sala (existente o nueva).
  */
-export const getOrCreateTournamentRoom = (roomId, io, creatorId, entryFee) => {
+export const getOrCreateTournamentRoom = (roomId, io, creatorId, entryFee, code) => {
   if (!tournamentRooms.has(roomId)) {
-    const newRoom = new TournamentRoom(io, roomId, creatorId, entryFee);
+    const newRoom = new TournamentRoom(io, roomId, creatorId, entryFee, code);
     tournamentRooms.set(roomId, newRoom);
     console.log(
-      `🏆 [GameManager] Sala TORNEO creada: ${roomId} (creador: ${creatorId}, entrada: ${entryFee})`,
+      `🏆 [GameManager] Sala TORNEO creada: ${roomId} (creador: ${creatorId}, entrada: ${entryFee}, código: ${code})`,
     );
     notifyAdminsRoomUpdate();
     return newRoom;

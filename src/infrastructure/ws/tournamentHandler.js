@@ -122,6 +122,7 @@ export const tournamentHandler = (io, socket) => {
           io,
           isCreator ? userId : undefined,
           entryFee,
+          tournamentFromDB.code,
         );
         console.log(
           `🎯 [Torneo] Jugador ${userName} (${userId}) ${
@@ -140,7 +141,7 @@ export const tournamentHandler = (io, socket) => {
           callback({
             message: "Unido al torneo",
             roomId,
-            tournamentCode: tournamentFromDB.code, 
+            tournamentCode: tournamentFromDB.code,
             user: player.toSocketData(),
           });
         }
