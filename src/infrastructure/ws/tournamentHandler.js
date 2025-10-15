@@ -28,6 +28,7 @@ export const tournamentHandler = (io, socket) => {
   socket.on("tournament-join", async (data, callback) => {
     const { userId, userName, balance, tournamentId: tournamentIdentifier } = data;
     const playerId = userId;
+
     if (
       !tournamentIdentifier ||
       typeof tournamentIdentifier !== "string" ||
@@ -61,6 +62,17 @@ export const tournamentHandler = (io, socket) => {
         );
       } else {
         roomId = tournamentIdentifier.trim();
+        tournamentFromDB = await prisma.tournament.findUnique({
+          where: { id: roomId },
+        });
+
+        if (!tournamentFromDB) {
+          console.error(`❌ Torneo no encontrado por ID: ${roomId}`);
+          if (callback) {
+            callback({ error: "Torneo no encontrado" });
+          }
+          return;
+        }
       }
 
       const isNewRoom = !gameManager.getRoom(roomId);
@@ -128,9 +140,7 @@ export const tournamentHandler = (io, socket) => {
           callback({
             message: "Unido al torneo",
             roomId,
-            tournamentCode: tournamentIdentifier.startsWith("T_")
-              ? tournamentIdentifier
-              : undefined,
+            tournamentCode: tournamentFromDB.code, 
             user: player.toSocketData(),
           });
         }
@@ -271,7 +281,6 @@ export const tournamentHandler = (io, socket) => {
       console.log(`✅ [tournamentHandler] Jugador ${userId} eliminado de sala ${roomId}`);
 
       if (room.players.size === 0) {
-        // ✅ Verificar que sea TournamentRoom antes de llamar notifyTournamentRemoved
         if (room instanceof TournamentRoom) {
           room.notifyTournamentRemoved(io);
         }
