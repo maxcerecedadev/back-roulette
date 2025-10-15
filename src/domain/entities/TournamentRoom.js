@@ -1,5 +1,4 @@
 // src/domain/entities/TournamentRoom.js
-
 import { RouletteEngine } from "#domain/entities/RouletteEngine.js";
 import { emitErrorByKey } from "#shared/errorHandler.js";
 import { BetLimits } from "#domain/value-objects/BetLimits.js";
@@ -12,7 +11,6 @@ import prisma from "#prisma";
  * Los jugadores compiten por un premio basado en su rendimiento acumulado.
  */
 
-// Estados del juego en un torneo
 const GAME_STATES = {
   BETTING: "betting",
   SPINNING: "spinning",
@@ -21,8 +19,25 @@ const GAME_STATES = {
   FINISHED: "finished",
 };
 
+const mapGameStateToTournamentStatus = (gameState, playersSize) => {
+  if (
+    gameState === GAME_STATES.BETTING ||
+    gameState === GAME_STATES.SPINNING ||
+    gameState === GAME_STATES.PAYOUT
+  ) {
+    return "in-progress";
+  }
+  if (gameState === GAME_STATES.RESULTS) {
+    return "in-progress";
+  }
+  if (playersSize >= 3) {
+    return "starting";
+  }
+  return "waiting";
+};
+
 export class TournamentRoom {
-  constructor(io, roomId, creatorId) {
+  constructor(io, roomId, creatorId, entryFee) {
     this.server = io;
     this.id = roomId;
     this.creatorId = creatorId;
@@ -41,10 +56,56 @@ export class TournamentRoom {
     this.timeouts = [];
     this.intervals = [];
     this.isStarted = false;
-    this.entryFee = 10000;
+    this.entryFee = entryFee;
     this.houseCutPercentage = 0.2; // 20% para la casa
     this.totalPot = 0; // Acumulado de inscripciones
     this.playablePot = 0; // 80% del totalPot → premio a repartir
+  }
+
+  /**
+   * Devuelve información pública sobre la sala para mostrar en la lista de torneos.
+   * @returns {Object} Información pública del torneo.
+   */
+  getPublicInfo() {
+    const code = this.code || this.id;
+    return {
+      id: this.id,
+      code: code,
+      players: this.players.size,
+      maxPlayers: 3,
+      createdAt: this.createdAt || new Date(),
+      status: mapGameStateToTournamentStatus(this.gameState, this.players.size),
+      isStarted: this.isStarted,
+      currentRound: this.currentRound,
+      maxRounds: this.maxRounds,
+      gameState: this.gameState,
+      entryFee: this.entryFee,
+    };
+  }
+
+  /**
+   * Notifica a todos los clientes interesados (no necesariamente jugadores de la sala)
+   * sobre una actualización en la sala de torneo.
+   * @param {Object} io - Instancia de Socket.IO Server.
+   */
+  notifyTournamentUpdate(io) {
+    const publicInfo = this.getPublicInfo();
+    console.log(
+      `📢 [TournamentRoom] Notificando actualización de sala ${this.id} a todos los clientes interesados.`,
+    );
+    io.emit("tournament:room-updated", publicInfo);
+  }
+
+  /**
+   * Notifica a todos los clientes interesados (no necesariamente jugadores de la sala)
+   * sobre la eliminación de la sala de torneo.
+   * @param {Object} io - Instancia de Socket.IO Server.
+   */
+  notifyTournamentRemoved(io) {
+    console.log(
+      `🗑️ [TournamentRoom] Notificando eliminación de sala ${this.id} a todos los clientes interesados.`,
+    );
+    io.emit("tournament:room-removed", this.id);
   }
 
   /**
@@ -150,6 +211,7 @@ export class TournamentRoom {
       timeRemaining: this.timeRemaining,
       players: Array.from(this.players.values()).map((p) => ({
         ...p.toSocketData(),
+        balance: p.balance,
         isCreator: p.id === this.creatorId,
         tournamentBalance: p.tournamentBalance,
       })),

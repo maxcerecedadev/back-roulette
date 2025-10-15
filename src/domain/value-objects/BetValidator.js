@@ -100,7 +100,7 @@ export class BetValidator {
    * @type {Array<string>}
    */
   static COLUMN_BET_KEYS = ["column_1", "column_2", "column_3"];
-  
+
   /**
    * Claves de apuestas de docena para validación de combinaciones.
    * @type {Array<string>}

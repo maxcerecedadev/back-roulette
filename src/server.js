@@ -12,12 +12,6 @@ import routes from "#infra/http/routes/index.js";
 import { initGameManager, getRooms } from "./application/managers/gameManager.js";
 import { specs, swaggerUi } from "../docs/swagger.js";
 
-/**
- * Servidor principal de la aplicación de ruleta.
- * Configura Express, Socket.IO y maneja las conexiones de clientes.
- * Soporta dos modos de juego: individual y torneo.
- */
-
 config();
 
 const PORT = process.env.PORT || 2000;
@@ -56,6 +50,8 @@ io.on("connection", (socket) => {
     return;
   }
 
+  tournamentHandler(io, socket);
+
   socket.on("join-mode", (mode, callback) => {
     console.log(`🎯 [server] join-mode recibido: ${mode}`);
 
@@ -65,7 +61,6 @@ io.on("connection", (socket) => {
         callback({ success: true });
       }
     } else if (mode === "tournament") {
-      tournamentHandler(io, socket);
       if (callback && typeof callback === "function") {
         callback({ success: true });
       }
@@ -87,10 +82,6 @@ initGameManager(io);
 
 // =============== INICIO DEL SERVIDOR ===============
 
-/**
- * Inicia el servidor y establece la conexión con la base de datos.
- * Configura los listeners y muestra información de estado.
- */
 async function startServer() {
   try {
     await prisma.$connect();
@@ -109,10 +100,6 @@ async function startServer() {
 
 // =============== MANEJO DE CIERRE GRACEFUL ===============
 
-/**
- * Cierra el servidor de forma segura.
- * Desconecta la base de datos y termina el proceso.
- */
 async function shutdown() {
   try {
     await prisma.$disconnect();

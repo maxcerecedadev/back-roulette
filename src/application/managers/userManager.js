@@ -1,6 +1,6 @@
 // src/application/managers/userManager.js
 
-import prisma from "#prisma"
+import prisma from "#prisma";
 
 /**
  * UserManager - Gestor de operaciones relacionadas con usuarios
@@ -15,20 +15,20 @@ import prisma from "#prisma"
 export const getAllUsers = async (filters = {}) => {
   try {
     const whereClause = {};
-    
+
     if (filters.search) {
       whereClause.name = {
         contains: filters.search,
-        mode: 'insensitive',
+        mode: "insensitive",
       };
     }
-    
+
     if (filters.minBalance !== undefined) {
       whereClause.balance = {
         gte: filters.minBalance,
       };
     }
-    
+
     if (filters.maxBalance !== undefined) {
       whereClause.balance = {
         ...whereClause.balance,
@@ -57,7 +57,7 @@ export const getAllUsers = async (filters = {}) => {
         updatedAt: true,
       },
       orderBy: {
-        createdAt: 'desc',
+        createdAt: "desc",
       },
       skip: offset,
       take: limit,
@@ -70,10 +70,10 @@ export const getAllUsers = async (filters = {}) => {
       total,
       page,
       limit,
-      totalPages
+      totalPages,
     };
   } catch (error) {
-    console.error('Error getting all users:', error);
+    console.error("Error getting all users:", error);
     throw error;
   }
 };
@@ -89,13 +89,13 @@ export const getUserById = async (id) => {
       where: { id },
       include: {
         rouletteRounds: {
-          take: 10, 
-          orderBy: { createdAt: 'desc' },
+          take: 10,
+          orderBy: { createdAt: "desc" },
         },
       },
     });
   } catch (error) {
-    console.error('Error getting user by ID:', error);
+    console.error("Error getting user by ID:", error);
     throw error;
   }
 };
@@ -109,7 +109,7 @@ export const deleteUser = async (userId) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, name: true }
+      select: { id: true, name: true },
     });
 
     if (!user) {
@@ -122,7 +122,7 @@ export const deleteUser = async (userId) => {
 
     return user;
   } catch (error) {
-    console.error('Error deleting user:', error);
+    console.error("Error deleting user:", error);
     throw error;
   }
 };

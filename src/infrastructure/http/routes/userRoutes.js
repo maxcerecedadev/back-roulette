@@ -66,7 +66,7 @@ const router = Router();
 router.get("/", adminAuth, async (req, res) => {
   try {
     const { search, minBalance, maxBalance, page = 1, limit = 20 } = req.query;
-    
+
     const filters = {
       search: search || undefined,
       minBalance: minBalance ? parseFloat(minBalance) : undefined,

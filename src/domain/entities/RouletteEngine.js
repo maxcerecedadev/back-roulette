@@ -15,7 +15,7 @@ export class RouletteEngine {
    * Usado para determinar el color de los números ganadores.
    */
   static RED_NUMBERS = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
-  
+
   /**
    * Números negros en la ruleta europea (18 números).
    * Usado para determinar el color de los números ganadores.
@@ -29,13 +29,13 @@ export class RouletteEngine {
    * Usado para validar combinaciones de apuestas.
    */
   static COLUMN_BET_KEYS = ["column_1", "column_2", "column_3"];
-  
+
   /**
    * Claves de apuestas de docena (1ra, 2da, 3ra docena).
    * Usado para validar combinaciones de apuestas.
    */
   static DOZEN_BET_KEYS = ["dozen_1", "dozen_2", "dozen_3"];
-  
+
   /**
    * Apuestas que no pueden combinarse entre sí.
    * Referencia a las apuestas conflictivas definidas en BetValidator.
@@ -256,7 +256,7 @@ export class RouletteEngine {
         reasonCode,
         details: {
           betKey,
-          reason: humanizedReason, 
+          reason: humanizedReason,
           ...(betValidation.coverage && { coverage: betValidation.coverage }),
         },
       };
@@ -272,7 +272,7 @@ export class RouletteEngine {
    * @param {Map<string, number>} existingBets - Mapa de apuestas actuales del jugador.
    * @returns {boolean} `true` si la apuesta es válida, `false` si hay conflicto.
    */
-  
+
   isBetAllowed(betKey, existingBets) {
     const result = this.isBetAllowedDetailed(betKey, existingBets, 0);
     return result.allowed;

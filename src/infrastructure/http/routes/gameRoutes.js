@@ -52,7 +52,7 @@ router.get("/status", adminAuth, (req, res) => {
  * @swagger
  * /peek/{roomId}:
  *   get:
- *     summary: Obtiene los resultados futuros de una sala 
+ *     summary: Obtiene los resultados futuros de una sala
  *     tags: [Game Management]
  *     security:
  *       - bearerAuth: []
@@ -452,13 +452,22 @@ router.post("/auth/validate-token", async (req, res) => {
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - maxPlayers
+ *               - maxRounds
+ *               - entryFee
  *             properties:
  *               maxPlayers:
  *                 type: integer
- *                 default: 3
+ *                 minimum: 3
+ *                 maximum: 10
  *               maxRounds:
  *                 type: integer
- *                 default: 10
+ *                 minimum: 1
+ *                 maximum: 100
+ *               entryFee:
+ *                 type: integer
+ *                 minimum: 1
  *     responses:
  *       200:
  *         description: Torneo creado
@@ -475,11 +484,37 @@ router.post("/auth/validate-token", async (req, res) => {
  *                   type: string
  *                 message:
  *                   type: string
+ *       400:
+ *         description: Parámetros inválidos
  *       500:
  *         description: Error interno
  */
 router.post("/tournament/create", async (req, res) => {
-  const { maxPlayers = 3, maxRounds = 10 } = req.body;
+  const { maxPlayers, maxRounds, entryFee } = req.body;
+
+  if (maxPlayers === undefined || maxRounds === undefined || entryFee === undefined) {
+    return res.status(400).json({
+      error: "Los campos maxPlayers, maxRounds y entryFee son obligatorios",
+    });
+  }
+
+  if (!Number.isInteger(maxPlayers) || maxPlayers < 2 || maxPlayers > 10) {
+    return res.status(400).json({
+      error: "maxPlayers debe ser un número entero entre 2 y 10",
+    });
+  }
+
+  if (!Number.isInteger(maxRounds) || maxRounds < 1 || maxRounds > 100) {
+    return res.status(400).json({
+      error: "maxRounds debe ser un número entero entre 1 y 100",
+    });
+  }
+
+  if (!Number.isInteger(entryFee) || entryFee < 1) {
+    return res.status(400).json({
+      error: "entryFee debe ser un número entero positivo",
+    });
+  }
 
   try {
     const now = new Date();
@@ -513,6 +548,7 @@ router.post("/tournament/create", async (req, res) => {
         status: "WAITING",
         results: [],
         createdAt: now,
+        entryFee,
       },
     });
 
@@ -524,6 +560,7 @@ router.post("/tournament/create", async (req, res) => {
       tournamentCode,
       maxPlayers,
       maxRounds,
+      entryFee,
       message: "Torneo creado exitosamente",
     });
   } catch (error) {
