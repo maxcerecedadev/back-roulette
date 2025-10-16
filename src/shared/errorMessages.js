@@ -47,6 +47,14 @@ export const ERROR_DEFINITIONS = {
     type: "validation",
     message: "Has superado el límite de apuesta para este tipo.",
   },
+  NO_BETS_TO_DOUBLE: {
+    type: "validation",
+    message: "No hay apuestas para duplicar.",
+  },
+  BET_OPERATION_IN_PROGRESS: {
+    type: "validation",
+    message: "Ya hay una operación de apuesta en progreso.",
+  },
 };
 
 export const getErrorDefinition = (key) => {

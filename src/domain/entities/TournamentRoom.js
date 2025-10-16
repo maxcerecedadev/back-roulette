@@ -57,6 +57,7 @@ export class TournamentRoom {
     this.intervals = [];
     this.isStarted = false;
     this.entryFee = entryFee;
+    this.pendingRequests = new Map();
     this.houseCutPercentage = 0.2; // 20% para la casa
     this.totalPot = 0; // Acumulado de inscripciones
     this.playablePot = 0; // 80% del totalPot → premio a repartir
@@ -832,96 +833,219 @@ export class TournamentRoom {
       });
     }
 
-    callback?.({ success: true, newBalance: player.tournamentBalance }); // ✅ Usar tournamentBalance
-  }
-
-  "repeat-bet"(playerId, data, callback) {
-    if (this.gameState !== GAME_STATES.BETTING)
-      return callback?.({
-        success: false,
-        message: "No se aceptan apuestas ahora.",
-      });
-
-    const player = this.players.get(playerId);
-    if (!player) return callback?.({ success: false, message: "Jugador no encontrado." });
-
-    const lastBets = this.lastBets.get(playerId);
-    if (!lastBets || lastBets.size === 0)
-      return callback?.({
-        success: false,
-        message: "No hay apuestas para repetir.",
-      });
-
-    let totalAmount = 0;
-    lastBets.forEach((amount) => (totalAmount += amount));
-    if (player.tournamentBalance < totalAmount)
-      return callback?.({ success: false, message: "Saldo insuficiente." });
-
-    const repeatedBets = new Map();
-    lastBets.forEach((amount, betKey) => repeatedBets.set(betKey, amount));
-
-    this.bets.set(playerId, repeatedBets);
-    player.tournamentBalance -= totalAmount;
-
-    const betsArray = Array.from(repeatedBets, ([key, val]) => ({
-      betKey: key,
-      amount: val,
-    }));
-
-    if (player.socket) {
-      player.socket.emit("tournament-repeat-bet", {
-        newBalance: player.tournamentBalance,
-        bets: betsArray,
-        totalBet: totalAmount,
-      });
-    }
-
     callback?.({ success: true, newBalance: player.tournamentBalance });
   }
 
-  "double-bet"(playerId, data, callback) {
-    if (this.gameState !== GAME_STATES.BETTING)
+  "repeat-bet"(playerId, data, callback) {
+    if (!this.acquireBetLock(playerId, "repeat")) {
+      console.warn(`⚠️ [repeat-bet] Rechazando solicitud duplicada para ${playerId} (repeat).`);
       return callback?.({
         success: false,
-        message: "No se aceptan apuestas ahora.",
+        message: "Operación de repetir apuesta ya en progreso.",
       });
-
-    const playerBets = this.bets.get(playerId);
-    if (!playerBets || playerBets.size === 0)
-      return callback?.({
-        success: false,
-        message: "No hay apuestas para duplicar.",
-      });
-
-    const player = this.players.get(playerId);
-    if (!player) return callback?.({ success: false, message: "Jugador no encontrado." });
-
-    let totalAdditionalBet = 0;
-    playerBets.forEach((amount) => (totalAdditionalBet += amount));
-
-    if (player.tournamentBalance < totalAdditionalBet)
-      return callback?.({ success: false, message: "Saldo insuficiente." });
-
-    const limitErrors = [];
-    for (const [betKey, amount] of playerBets.entries()) {
-      const limitValidation = BetLimits.validateBetAmount(betKey, playerBets, amount);
-      if (!limitValidation.allowed) {
-        limitErrors.push({ betKey, reason: `Límite excedido para ${betKey}` });
-      }
     }
 
-    if (limitErrors.length > 0) {
-      const socket = player.socket;
-      if (socket) {
-        emitErrorByKey(socket, "BET_TYPE_LIMIT_EXCEEDED", {
-          details: { reason: limitErrors[0].reason },
+    try {
+      if (this.gameState !== GAME_STATES.BETTING) {
+        return callback?.({ success: false, message: "No se aceptan apuestas ahora." });
+      }
+
+      const player = this.players.get(playerId);
+      if (!player) {
+        return callback?.({ success: false, message: "Jugador no encontrado." });
+      }
+
+      const currentPlayerBets = this.bets.get(playerId);
+      if (currentPlayerBets && currentPlayerBets.size > 0) {
+        console.log(
+          `⚠️ [repeat-bet] Jugador ${playerId} ya tiene apuestas en la ronda ${this.currentRound}. No se puede repetir.`,
+        );
+        return callback?.({
+          success: false,
+          message: "Ya tienes apuestas en esta ronda. No se puede repetir.",
         });
       }
-      return callback?.({ success: false, message: limitErrors[0].reason });
+
+      const lastBets = this.lastBets.get(playerId);
+      if (!lastBets || lastBets.size === 0) {
+        return callback?.({
+          success: false,
+          message: "No hay apuestas para repetir.",
+        });
+      }
+
+      let totalAmountToRepeat = 0;
+      lastBets.forEach((amount) => (totalAmountToRepeat += amount));
+
+      if (player.tournamentBalance < totalAmountToRepeat) {
+        const socket = player.socket;
+        if (socket) {
+          emitErrorByKey(socket, "INSUFFICIENT_BALANCE", {
+            details: { attempted: totalAmountToRepeat, currentBalance: player.tournamentBalance },
+          });
+        }
+        return callback?.({ success: false, message: "Saldo de torneo insuficiente." });
+      }
+
+      const repeatedBets = new Map();
+      for (const [betKey, amount] of lastBets.entries()) {
+        repeatedBets.set(betKey, amount);
+      }
+
+      player.tournamentBalance -= totalAmountToRepeat;
+      this.bets.set(playerId, repeatedBets);
+
+      const betsArray = Array.from(repeatedBets, ([key, val]) => ({ betKey: key, amount: val }));
+      const totalBet = totalAmountToRepeat;
+
+      if (player.socket) {
+        player.socket.emit("tournament-repeat-bet", {
+          newBalance: player.tournamentBalance,
+          bets: betsArray,
+          totalBet: totalBet,
+        });
+      }
+
+      callback?.({ success: true, newBalance: player.tournamentBalance });
+    } catch (error) {
+      console.error(`❌ Error en 'repeat-bet' para ${playerId}:`, error);
+      callback?.({
+        success: false,
+        message: "Error interno al procesar la repetición de apuestas.",
+      });
+    } finally {
+      this.releaseBetLock(playerId, "repeat");
+    }
+  }
+
+  "double-bet"(playerId, data, callback) {
+    if (!this.acquireBetLock(playerId, "double")) {
+      console.warn(`⚠️ [double-bet] Rechazando solicitud duplicada para ${playerId} (double).`);
+      const player = this.players.get(playerId);
+      if (player && player.socket) {
+        emitErrorByKey(player.socket, "BET_OPERATION_IN_PROGRESS", {
+          details: { operation: "double" },
+        });
+      }
+      return callback?.({
+        success: false,
+        message: "Operación de duplicar apuesta ya en progreso.",
+      });
     }
 
-    for (const [betKey, amount] of playerBets.entries()) {
-      this["place-bet"](playerId, { betKey, amount, round: this.currentRound }, callback, true);
+    try {
+      if (this.gameState !== GAME_STATES.BETTING) {
+        const socket = this.getPlayerSocket(playerId);
+        if (socket) emitErrorByKey(socket, "GAME_STATE_INVALID");
+        return callback?.({
+          success: false,
+          message: "No se aceptan apuestas ahora.",
+        });
+      }
+
+      const playerBets = this.bets.get(playerId);
+      if (!playerBets || playerBets.size === 0) {
+        const socket = this.getPlayerSocket(playerId);
+        if (socket) emitErrorByKey(socket, "NO_BETS_TO_DOUBLE");
+        return callback?.({
+          success: false,
+          message: "No hay apuestas para duplicar.",
+        });
+      }
+
+      const player = this.players.get(playerId);
+      if (!player) {
+        const socket = this.getPlayerSocket(playerId);
+        if (socket) emitErrorByKey(socket, "PLAYER_NOT_FOUND");
+        return callback?.({ success: false, message: "Jugador no encontrado." });
+      }
+
+      let totalAmountToDouble = 0;
+      playerBets.forEach((amount) => (totalAmountToDouble += amount));
+
+      if (player.tournamentBalance < totalAmountToDouble) {
+        const socket = player.socket;
+        if (socket) {
+          emitErrorByKey(socket, "INSUFFICIENT_BALANCE", {
+            details: {
+              attempted: totalAmountToDouble,
+              currentBalance: player.tournamentBalance,
+            },
+          });
+        }
+        return callback?.({ success: false, message: "Saldo insuficiente para duplicar." });
+      }
+
+      const limitErrors = [];
+      for (const [betKey, amount] of playerBets.entries()) {
+        const currentTotalForThisType = playerBets.get(betKey) || 0;
+        const newTotalForThisType = currentTotalForThisType + amount;
+        const tempBetsForValidation = new Map(playerBets);
+        tempBetsForValidation.set(betKey, newTotalForThisType);
+
+        const limitValidation = BetLimits.validateBetAmount(betKey, tempBetsForValidation, amount);
+        if (!limitValidation.allowed) {
+          limitErrors.push({
+            betKey,
+            reason: `Límite excedido para ${betKey}: ${limitValidation.reason}`,
+          });
+        }
+      }
+
+      if (limitErrors.length > 0) {
+        const socket = player.socket;
+        if (socket) {
+          emitErrorByKey(socket, "BET_TYPE_LIMIT_EXCEEDED", {
+            details: { reason: limitErrors[0].reason, limitErrors },
+          });
+        }
+        return callback?.({ success: false, message: limitErrors[0].reason });
+      }
+
+      let allDoubledSuccessfully = true;
+      const individualErrors = [];
+      for (const [betKey, amount] of playerBets.entries()) {
+        this["place-bet"](playerId, { betKey, amount, round: this.currentRound }, (err) => {
+          if (err) {
+            console.error(`❌ Error duplicando apuesta ${betKey} para ${playerId}:`, err.message);
+            allDoubledSuccessfully = false;
+            individualErrors.push({ betKey, error: err.message });
+          }
+        });
+      }
+
+      if (allDoubledSuccessfully) {
+        const updatedPlayerBets = this.bets.get(playerId) || new Map();
+        const betsArray = Array.from(updatedPlayerBets, ([key, val]) => ({
+          betKey: key,
+          amount: val,
+        }));
+        const totalBet = betsArray.reduce((sum, b) => sum + b.amount, 0);
+
+        if (player.socket) {
+          player.socket.emit("tournament-double-bet", {
+            newBalance: player.tournamentBalance,
+            bets: betsArray,
+            totalBet,
+          });
+        }
+        callback?.({ success: true, newBalance: player.tournamentBalance });
+      } else {
+        const errorMessage =
+          individualErrors.length > 0
+            ? `Error al duplicar algunas apuestas: ${individualErrors.map((e) => e.error).join(", ")}`
+            : "Error al duplicar algunas apuestas.";
+        callback?.({ success: false, message: errorMessage });
+      }
+    } catch (error) {
+      console.error(`❌ Error en 'double-bet' para ${playerId}:`, error);
+      const player = this.players.get(playerId);
+      if (player && player.socket) {
+        emitErrorByKey(player.socket, "SERVER_ERROR");
+      }
+      callback?.({ success: false, message: "Error interno al procesar duplicar apuestas." });
+    } finally {
+      this.releaseBetLock(playerId, "double");
     }
   }
 
@@ -939,6 +1063,40 @@ export class TournamentRoom {
   }
 
   // =============== MÉTODOS AUXILIARES ASINCRONOS ===============
+
+  /**
+   * Intenta adquirir un lock para una operación de apuesta de un jugador.
+   * @param {string} playerId - ID del jugador.
+   * @param {string} operation - Tipo de operación ('place', 'repeat', 'undo', 'double', 'clear').
+   * @returns {boolean} True si se adquirió el lock, false si ya estaba bloqueado.
+   */
+  acquireBetLock(playerId, operation) {
+    const key = `${playerId}_${operation}`;
+    if (this.pendingRequests.has(key)) {
+      console.log(`🔒 [acquireBetLock] Operación '${operation}' ya en progreso para ${playerId}.`);
+      return false;
+    }
+    this.pendingRequests.set(key, true);
+    console.log(`🔓 [acquireBetLock] Lock adquirido para '${operation}' de ${playerId}.`);
+    return true;
+  }
+
+  /**
+   * Libera un lock para una operación de apuesta de un jugador.
+   * @param {string} playerId - ID del jugador.
+   * @param {string} operation - Tipo de operación ('place', 'repeat', 'undo', 'double', 'clear').
+   */
+  releaseBetLock(playerId, operation) {
+    const key = `${playerId}_${operation}`;
+    if (this.pendingRequests.has(key)) {
+      this.pendingRequests.delete(key);
+      console.log(`🔓 [releaseBetLock] Lock liberado para '${operation}' de ${playerId}.`);
+    } else {
+      console.warn(
+        `⚠️ [releaseBetLock] Intento de liberar lock no encontrado para '${operation}' de ${playerId}.`,
+      );
+    }
+  }
 
   /**
    * Simula la confirmación de apuestas en un torneo virtual.
