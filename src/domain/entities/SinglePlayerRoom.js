@@ -561,34 +561,87 @@ export class SinglePlayerRoom {
       });
     }
 
-    let totalAmount = 0;
-    lastBets.forEach((amount) => (totalAmount += amount));
-    if (player.balance < totalAmount) {
+    // Calcular el monto total del último bloque de apuestas
+    let totalLastBetsAmount = 0;
+    lastBets.forEach((amount) => (totalLastBetsAmount += amount));
+
+    // Verificar si ya hay apuestas actuales
+    const currentBets = this.bets.get(playerId) || new Map();
+
+    if (currentBets.size > 0) {
+      // Si ya hay apuestas actuales, no repetir (evitar duplicación)
+      const betsArray = Array.from(currentBets, ([key, val]) => ({
+        betKey: key,
+        amount: val,
+      }));
+      const totalBet = betsArray.reduce((sum, b) => sum + b.amount, 0);
+
+      if (player.socket) {
+        player.socket.emit("repeat-bet", {
+          newBalance: player.balance,
+          bets: betsArray,
+          totalBet,
+        });
+      }
+      return callback?.({ success: true, newBalance: player.balance });
+    }
+
+    // Verificar saldo suficiente para todas las apuestas del bloque
+    if (player.balance < totalLastBetsAmount) {
       const socket = player.socket;
       if (socket) {
         emitErrorByKey(socket, "INSUFFICIENT_BALANCE", {
-          details: { attempted: totalAmount, currentBalance: player.balance },
+          details: {
+            attempted: totalLastBetsAmount,
+            currentBalance: player.balance,
+          },
         });
       }
-      return callback?.({ success: false, message: "Saldo insuficiente." });
+      return callback?.({
+        success: false,
+        message: "Saldo insuficiente para repetir todas las apuestas.",
+      });
     }
 
-    const repeatedBets = new Map();
-    lastBets.forEach((amount, betKey) => repeatedBets.set(betKey, amount));
+    // Validar todas las apuestas del bloque antes de aplicarlas
+    for (const [betKey, amount] of lastBets) {
+      const validation = this.rouletteEngine.isBetAllowedDetailed(betKey, currentBets, amount);
+      if (!validation.allowed) {
+        const socket = player.socket;
+        if (socket) {
+          emitErrorByKey(socket, validation.reasonCode || "BET_NOT_ALLOWED", {
+            betKey,
+            amount,
+            details: { ...validation.details, betKey },
+          });
+        }
+        return callback?.({
+          success: false,
+          message: validation.details?.reason || "Apuesta no permitida.",
+        });
+      }
+    }
 
-    this.bets.set(playerId, repeatedBets);
-    player.balance -= totalAmount;
+    // Aplicar todas las apuestas del último bloque
+    lastBets.forEach((amount, betKey) => {
+      currentBets.set(betKey, amount);
+    });
 
-    const betsArray = Array.from(repeatedBets, ([key, val]) => ({
+    // Actualizar el saldo
+    player.balance -= totalLastBetsAmount;
+    this.bets.set(playerId, currentBets);
+
+    const betsArray = Array.from(currentBets, ([key, val]) => ({
       betKey: key,
       amount: val,
     }));
+    const totalBet = betsArray.reduce((sum, b) => sum + b.amount, 0);
 
     if (player.socket) {
       player.socket.emit("repeat-bet", {
         newBalance: player.balance,
         bets: betsArray,
-        totalBet: totalAmount,
+        totalBet,
       });
     }
 

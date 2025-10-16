@@ -120,18 +120,23 @@ export const singlePlayerHandler = (io, socket) => {
     }
   });
 
-  socket.on("repeat-bet", ({ roomId }) => {
+  socket.on("repeat-bet", ({ roomId }, callback) => {
     const room = gameManager.getRoom(roomId);
     const playerId = getPlayerId();
-    if (!room || !playerId) return;
+    if (!room || !playerId) {
+      if (callback) callback({ success: false, message: "Sala o jugador no encontrado" });
+      return;
+    }
+
     try {
-      room.repeatBet(playerId);
+      room.repeatBet(playerId, callback);
       const player = room.getPlayer(playerId);
       if (player) {
         gameManager.notifyAdminPlayerBalanceUpdate(roomId, playerId, player.balance);
       }
     } catch (error) {
       console.error("Error repeating bet:", error);
+      if (callback) callback({ success: false, message: error.message });
     }
   });
 
