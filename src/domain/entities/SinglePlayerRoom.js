@@ -340,7 +340,7 @@ export class SinglePlayerRoom {
         });
     });
 
-    setTimeout(() => this.nextState(), 5000);
+    setTimeout(() => this.nextState(), 6000);
   }
 
   /**
