@@ -207,7 +207,7 @@ export class SinglePlayerRoom {
       winningNumber: this.winningNumber.number,
       winningColor: this.winningNumber.color,
     });
-    setTimeout(() => this.nextState(), 6000);
+    setTimeout(() => this.nextState(), 8000);
   }
 
   /**

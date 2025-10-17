@@ -443,7 +443,7 @@ export class TournamentRoom {
       `🎯 [spinWheel] ¡Número ganador de la ronda ${this.currentRound}!: ${this.winningNumber.number} (${this.winningNumber.color})`,
     );
     this.broadcast("tournament-state-update", this.getTournamentState());
-    setTimeout(() => this.nextState(), 6000);
+    setTimeout(() => this.nextState(), 8000);
   }
 
   resetRound() {
