@@ -316,7 +316,7 @@ export class TournamentRoom {
         });
       });
 
-      const timeoutId = setTimeout(() => this.spinWheel(), 6000);
+      const timeoutId = setTimeout(() => this.spinWheel(), 1000);
       this.timeouts.push(timeoutId);
     } else if (this.gameState === GAME_STATES.SPINNING) {
       this.gameState = GAME_STATES.PAYOUT;
