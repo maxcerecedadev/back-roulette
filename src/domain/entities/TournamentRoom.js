@@ -46,7 +46,7 @@ export class TournamentRoom {
     this.lastBets = new Map();
     this.gameState = GAME_STATES.BETTING;
     this.currentRound = 1;
-    this.maxRounds = 10; //! Máximo número de rondas
+    this.maxRounds = 2; //! Máximo número de rondas
     this.timeRemaining = 30; //!! 60s Luego
     this.manualMode = false;
     this.rouletteEngine = new RouletteEngine(20);
@@ -241,7 +241,7 @@ export class TournamentRoom {
     const player = this.players.get(playerId);
     const playerName = player.name || "Desconocido";
 
-    if (this.isStarted) {
+    if (this.isStarted && this.gameState !== "finished" && this.gameState !== "results") {
       player.disconnected = true;
       player.hasLeft = true;
       player.socket = null;
@@ -270,9 +270,8 @@ export class TournamentRoom {
     if (player.socket?.connected) {
       player.socket.emit("tournament-left", {
         reason: "left",
-        message: "Abandonaste el torneo. No serás elegible para premios.",
+        message: "Abandonaste el torneo.",
       });
-      player.socket.disconnect(true);
     }
 
     this.broadcast("tournament-state-update", this.getTournamentState());
@@ -394,41 +393,54 @@ export class TournamentRoom {
           message: "¡Torneo finalizado! Aquí están los resultados finales.",
         });
 
-        console.log(`📊 [Torneo] Mostrando resultados finales por 10 segundos...`);
+        console.log(
+          `📊 [Torneo] Resultados finales disponibles. Los jugadores pueden salir cuando quieran.`,
+        );
 
+        // Guardar en DB de forma asíncrona
         this.saveTournamentToDB().catch(console.error);
 
-        const timeoutId = setTimeout(() => {
-          this.gameState = GAME_STATES.FINISHED;
+        // Cambiar estado a finalizado inmediatamente
+        this.gameState = GAME_STATES.FINISHED;
 
-          this.broadcast("tournament-finished", {
-            standings: finalStandings,
-            prizeDistribution,
-            playablePot: this.playablePot,
-            houseCut: this.totalPot - this.playablePot,
-          });
+        // Emitir resultados finales a todos los jugadores
+        this.broadcast("tournament-finished", {
+          standings: finalStandings,
+          prizeDistribution,
+          playablePot: this.playablePot,
+          houseCut: this.totalPot - this.playablePot,
+        });
 
-          // 📢 Notificar a jugadores conectados
-          this.players.forEach((player) => {
-            if (player.socket?.connected) {
-              player.socket.emit("tournament-ended", {
-                reason: "finished",
-                message: "El torneo ha finalizado. Gracias por participar.",
-              });
-              player.socket.disconnect(true);
-            }
-          });
+        // Notificar fin del torneo SIN desconectar
+        this.players.forEach((player) => {
+          if (player.socket?.connected) {
+            player.socket.emit("tournament-ended", {
+              reason: "finished",
+              message: "¡Torneo finalizado! Puedes revisar los resultados y salir cuando quieras.",
+              shouldNavigateToResults: true, // Flag para navegación en frontend
+            });
+          }
+        });
 
-          this.players.clear();
-          console.log(`🗑️ [Torneo] Todos los jugadores eliminados de la sala ${this.id}`);
+        console.log(`✅ [Torneo] Resultados emitidos. Clientes permanecen conectados.`);
 
+        // Limpieza del servidor después de 5 minutos (fallback)
+        // Los clientes pueden quedarse más tiempo, pero el servidor limpia recursos
+        const cleanupTimeoutId = setTimeout(() => {
+          console.log(
+            `🧹 [Torneo] Iniciando limpieza de recursos del servidor (sala ${this.id})...`,
+          );
+
+          // Solo limpiar recursos del servidor, NO forzar desconexión de clientes
           gameManager.removeRoom(this.id);
-          console.log(`🗑️ [Torneo] Sala ${this.id} eliminada del gameManager`);
-
           this.destroy();
-        }, 10000);
 
-        this.timeouts.push(timeoutId);
+          console.log(
+            `🗑️ [Torneo] Sala ${this.id} limpiada del servidor. Clientes pueden seguir viendo resultados.`,
+          );
+        }, 300000); // 5 minutos = 300000ms
+
+        this.timeouts.push(cleanupTimeoutId);
         return;
       } else {
         this.currentRound++;

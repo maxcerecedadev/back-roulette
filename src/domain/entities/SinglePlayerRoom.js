@@ -85,12 +85,39 @@ export class SinglePlayerRoom {
   }
 
   /**
-   * Remueve un jugador de la sala.
+   * Remueve un jugador de la sala y limpia recursos si queda vacía.
    * @param {string} playerId - ID del jugador a remover.
    */
   removePlayer(playerId) {
-    if (this.players.has(playerId)) {
-      this.players.delete(playerId);
+    if (!this.players.has(playerId)) {
+      console.warn(`⚠️ [SinglePlayerRoom] Jugador ${playerId} no existe en sala ${this.id}`);
+      return;
+    }
+
+    const player = this.players.get(playerId);
+    const playerName = player?.name || "Desconocido";
+
+    this.players.delete(playerId);
+    console.log(
+      `🚪 [SinglePlayerRoom] Jugador ${playerId} (${playerName}) eliminado de sala ${this.id}`,
+    );
+
+    if (this.players.size === 0) {
+      console.log(`🧹 [SinglePlayerRoom] Sala ${this.id} vacía, limpiando recursos...`);
+
+      this.stopCountdown();
+
+      if (this.gameManager && typeof this.gameManager.removeRoom === "function") {
+        this.gameManager.removeRoom(this.id);
+        console.log(`🗑️ [SinglePlayerRoom] Sala ${this.id} eliminada del gameManager`);
+      }
+
+      if (this.gameManager && typeof this.gameManager.notifyAdminsRoomUpdate === "function") {
+        this.gameManager.notifyAdminsRoomUpdate();
+        console.log(
+          `📊 [SinglePlayerRoom] Panel de admin notificado sobre eliminación de sala ${this.id}`,
+        );
+      }
     }
   }
 

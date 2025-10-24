@@ -259,54 +259,69 @@ export const tournamentHandler = (io, socket) => {
 
   socket.on("leave-room", ({ roomId, userId }) => {
     console.log(`🚪 [tournamentHandler] Jugador ${userId} solicitó salir de sala ${roomId}`);
+
     if (!roomId || !userId) {
       console.warn("⚠️ [tournamentHandler] leave-room: faltan roomId o userId");
-      socket.emit("error", { message: "Faltan parámetros." });
       return;
     }
+
     const room = gameManager.getRoom(roomId);
-    if (!room) {
-      console.warn(`⚠️ [tournamentHandler] Sala ${roomId} no encontrada al salir`);
-      socket.emit("error", { message: "Sala no encontrada." });
+
+    if (!room || !(room instanceof TournamentRoom)) {
+      console.log(`ℹ️ [tournamentHandler] Sala ${roomId} no es de torneo, ignorando...`);
       return;
     }
-    if (room.isStarted) {
-      console.warn(`⚠️ [tournamentHandler] Jugador ${userId} intentó salir de torneo INICIADO`);
+
+    if (room.isStarted && room.gameState !== "finished" && room.gameState !== "results") {
+      console.warn(`⚠️ [tournamentHandler] Jugador ${userId} intentó salir de torneo EN CURSO`);
       socket.emit("error", {
-        message: "No puedes salir: el torneo ya ha comenzado.",
+        message: "No puedes salir: el torneo está en curso.",
       });
       return;
     }
+
     if (room.players.has(userId)) {
       room.removePlayer(userId);
       console.log(`✅ [tournamentHandler] Jugador ${userId} eliminado de sala ${roomId}`);
 
       if (room.players.size === 0) {
-        if (room instanceof TournamentRoom) {
-          room.notifyTournamentRemoved(io);
-        }
+        room.notifyTournamentRemoved(io);
         gameManager.removeRoom(roomId);
         console.log(`🗑️ [tournamentHandler] Sala ${roomId} eliminada por estar vacía`);
       } else {
         room.notifyTournamentUpdate(io);
       }
+    } else {
+      console.warn(`⚠️ [tournamentHandler] Jugador ${userId} no estaba en sala ${roomId}`);
     }
+
     if (socket.player && socket.player.id === userId) {
       delete socket.player;
       console.log(`♻️ [tournamentHandler] socket.player limpiado para ${userId}`);
     }
     delete socket.roomId;
     console.log(`♻️ [tournamentHandler] socket.roomId limpiado`);
+
     socket.leave(roomId);
+    console.log(`🔌 [tournamentHandler] Socket ${socket.id} salió de sala ${roomId} de Socket.IO`);
+
+    gameManager.notifyAdminsRoomUpdate();
+    console.log(`📊 [tournamentHandler] Panel de admin notificado sobre salida de ${userId}`);
+
+    socket.emit("left-room-success", { message: "Saliste correctamente del torneo." });
   });
 
   socket.on("disconnect", () => {
     const player = socket.player;
-    if (!player) return;
+    if (!player) {
+      gameManager.notifyAdminsRoomUpdate();
+      return;
+    }
 
     for (const [roomId, room] of getActiveTournamentRooms()) {
       if (room.players.has(player.id)) {
         const playerName = player.name || "Desconocido";
+
         if (room.isStarted) {
           console.warn(
             `⚠️ [Torneo] Jugador ${playerName} (${player.id}) se DESCONECTÓ, pero el torneo YA EMPEZÓ. No se elimina del juego.`,
@@ -316,24 +331,30 @@ export const tournamentHandler = (io, socket) => {
             playerName,
             message: `${playerName} se ha desconectado, pero el torneo continúa.`,
           });
+
           if (player.socket) {
             player.socket = null;
             player.socketId = null;
           }
+
           delete socket.player;
           delete socket.roomId;
+
           console.log(`ℹ️ Jugador ${player.id} marcado como desconectado. Torneo sigue activo.`);
           gameManager.notifyAdminsRoomUpdate();
           return;
         }
+
         console.log(
           `🚪 [Torneo] Jugador ${playerName} (${player.id}) se DESCONECTÓ de sala ${roomId}`,
         );
+
         room.removePlayer(player.id);
         delete socket.player;
         delete socket.roomId;
+
         console.log(`👥 [Torneo] Sala ${roomId} ahora tiene ${room.players.size} jugadores`);
-        gameManager.notifyAdminsRoomUpdate();
+
         if (room.players.size === 0) {
           if (room instanceof TournamentRoom) {
             room.notifyTournamentRemoved(io);
@@ -343,6 +364,8 @@ export const tournamentHandler = (io, socket) => {
         } else {
           room.notifyTournamentUpdate(io);
         }
+
+        gameManager.notifyAdminsRoomUpdate();
         break;
       }
     }
