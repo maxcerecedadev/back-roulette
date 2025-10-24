@@ -131,7 +131,7 @@ export const tournamentHandler = (io, socket) => {
         );
         socket.join(roomId);
         socket.roomId = roomId;
-        room.addPlayer(player, socket);
+        await room.addPlayer(player, socket);
         console.log(`👥 [Torneo] Sala ${roomId} ahora tiene ${room.players.size}/3 jugadores`);
         gameManager.notifyAdminsRoomUpdate();
 

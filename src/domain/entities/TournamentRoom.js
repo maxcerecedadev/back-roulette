@@ -4,6 +4,7 @@ import { emitErrorByKey } from "#shared/errorHandler.js";
 import { BetLimits } from "#domain/value-objects/BetLimits.js";
 import * as gameManager from "#app/managers/gameManager.js";
 import prisma from "#prisma";
+import { CasinoApiService } from "#src/infrastructure/api/casinoApiService.js";
 
 /**
  * Sala de torneo para múltiples jugadores.
@@ -131,27 +132,68 @@ export class TournamentRoom {
     return player?.socket || null;
   }
 
-  addPlayer(player, socket) {
+  async addPlayer(player, socket) {
     if (this.players.size >= 3) {
       throw new Error("La sala de torneo está llena (máx. 3 jugadores).");
     }
 
     if (player.balance < this.entryFee) {
       throw new Error(
-        "Saldo insuficiente para inscribirse en el torneo (se requieren 10.000 fichas).",
+        `Saldo insuficiente para inscribirse en el torneo (se requieren ${this.entryFee.toLocaleString()} fichas).`,
       );
     }
 
-    player.balance -= this.entryFee;
+    try {
+      await CasinoApiService.placeBet(
+        player.id,
+        this.entryFee,
+        socket.handshake.address || "unknown",
+      );
+      console.log(
+        `✅ [TournamentRoom] Entrada de torneo cobrada al casino para ${player.id}: ${this.entryFee} fichas`,
+      );
+    } catch (error) {
+      console.error(`❌ [TournamentRoom] Error cobrando entrada para ${player.id}:`, error.message);
+      throw new Error(`No se pudo procesar el pago de entrada: ${error.message}`);
+    }
 
+    const balanceBefore = player.balance;
+
+    player.balance -= this.entryFee;
     player.tournamentBalance = this.entryFee;
     player.initialTournamentBalance = this.entryFee;
-
     this.totalPot += this.entryFee;
 
     console.log(
       `🎟️ [TournamentRoom.addPlayer] Jugador ${player.id} (${player.name}) pagó ${this.entryFee} fichas. Balance real restante: ${player.balance}. Balance de torneo: ${player.tournamentBalance}. Poso total: ${this.totalPot}`,
     );
+
+    try {
+      await prisma.rouletteRound.create({
+        data: {
+          playerId: player.id,
+          sessionId: this.id,
+          roundId: `${this.id}_entry_${player.id}`,
+          gameState: "ENTRY",
+          winningNumber: 0,
+          winningColor: "none",
+          totalBetAmount: this.entryFee,
+          totalWinnings: 0,
+          netResult: -this.entryFee,
+          betResults: [],
+          playerBalanceBefore: balanceBefore,
+          playerBalanceAfter: player.balance,
+          currency: player.currency || "ARS",
+          ipAddress: socket.handshake.address || "unknown",
+          provider: "tournament",
+          reference: this.id,
+          description: `Entrada al torneo ${this.code || this.id}. Fee: ${this.entryFee}`,
+        },
+      });
+      console.log(`✅ Entrada de torneo registrada en DB para jugador ${player.id}`);
+    } catch (dbError) {
+      console.error(`❌ Error guardando entrada en DB para ${player.id}:`, dbError);
+    }
 
     player.socket = socket;
     player.socketId = socket.id;
@@ -301,7 +343,7 @@ export class TournamentRoom {
     }
   }
 
-  nextState() {
+  async nextState() {
     this.stopCountdown();
 
     if (this.gameState === GAME_STATES.BETTING) {
@@ -360,25 +402,142 @@ export class TournamentRoom {
         const finalStandings = this.calculateFinalStandings();
         const prizeDistribution = this.distributePrize(finalStandings);
 
-        prizeDistribution.forEach(({ playerId, prize }) => {
+        // 🔥 LLAMADAS A LA API: Depositar premios a los ganadores
+        for (const { playerId, prize } of prizeDistribution) {
           const player = this.players.get(playerId);
-          if (player) {
-            player.balance += prize;
-            console.log(
-              `🏆 [PREMIO] Jugador ${player.name} (${playerId}) ganó ${prize} fichas. Nuevo saldo real: ${player.balance}`,
-            );
+          if (!player) continue;
+
+          if (prize > 0) {
+            const balanceBefore = player.balance;
+
+            try {
+              // Llamar a la API para depositar el premio
+              await CasinoApiService.depositWinnings(playerId, prize, player.ip || "unknown");
+              console.log(
+                `✅ [TournamentRoom] Premio depositado en el casino para ${player.name} (${playerId}): ${prize} fichas`,
+              );
+
+              // Actualizar balance real DESPUÉS de confirmar el depósito
+              player.balance += prize;
+
+              console.log(
+                `🏆 [PREMIO] Jugador ${player.name} (${playerId}) ganó ${prize} fichas. Nuevo saldo real: ${player.balance}`,
+              );
+
+              // 🔥 EMITIR ACTUALIZACIÓN DE BALANCE AL FRONTEND
+              if (player.socket && player.socket.connected) {
+                player.socket.emit("balance-update", {
+                  newBalance: player.balance,
+                  reason: "tournament-prize",
+                  amount: prize,
+                });
+                console.log(
+                  `📤 [TournamentRoom] Balance actualizado enviado a ${player.name}: ${player.balance}`,
+                );
+              }
+
+              // 🔥 REGISTRAR EN DB: Transacción de premio
+              try {
+                await prisma.rouletteRound.create({
+                  data: {
+                    playerId: player.id,
+                    sessionId: this.id,
+                    roundId: `${this.id}_prize_${playerId}`,
+                    gameState: "PRIZE",
+                    winningNumber: 0,
+                    winningColor: "winner",
+                    totalBetAmount: 0,
+                    totalWinnings: prize,
+                    netResult: prize,
+                    betResults: [],
+                    playerBalanceBefore: balanceBefore,
+                    playerBalanceAfter: player.balance,
+                    currency: player.currency || "ARS",
+                    ipAddress: player.ip || "unknown",
+                    provider: "tournament",
+                    reference: this.id,
+                    description: `Premio del torneo ${this.code || this.id}. Posición ganadora.`,
+                  },
+                });
+                console.log(`✅ Premio registrado en DB para jugador ${player.id}`);
+              } catch (dbError) {
+                console.error(`❌ Error guardando premio en DB para ${playerId}:`, dbError);
+              }
+
+              if (player.socket) {
+                player.socket.emit("tournament-prize-awarded", {
+                  prize,
+                  message: `🎉 ¡Ganaste ${prize.toLocaleString()} fichas!`,
+                });
+              }
+            } catch (error) {
+              console.error(
+                `❌ [TournamentRoom] Error depositando premio para ${playerId}:`,
+                error.message,
+              );
+
+              // Registrar transacción fallida
+              await this.logFailedTransaction(playerId, "WIN", prize, error.message);
+
+              if (player.socket) {
+                player.socket.emit("tournament-prize-awarded", {
+                  prize: 0,
+                  message: "Error al procesar tu premio. Se registró para revisión manual.",
+                });
+              }
+            }
+          } else {
+            // Sin premio - también sincronizar balance
+            // 🔥 EMITIR BALANCE ACTUAL (sin cambios)
+            if (player.socket && player.socket.connected) {
+              player.socket.emit("balance-update", {
+                newBalance: player.balance,
+                reason: "tournament-ended",
+                amount: 0,
+              });
+              console.log(
+                `📤 [TournamentRoom] Balance sincronizado para ${player.name}: ${player.balance}`,
+              );
+            }
+
+            // Registrar en DB
+            try {
+              await prisma.rouletteRound.create({
+                data: {
+                  playerId: player.id,
+                  sessionId: this.id,
+                  roundId: `${this.id}_noprize_${playerId}`,
+                  gameState: "PRIZE",
+                  winningNumber: 0,
+                  winningColor: "none",
+                  totalBetAmount: 0,
+                  totalWinnings: 0,
+                  netResult: 0,
+                  betResults: [],
+                  playerBalanceBefore: player.balance,
+                  playerBalanceAfter: player.balance,
+                  currency: player.currency || "ARS",
+                  ipAddress: player.ip || "unknown",
+                  provider: "tournament",
+                  reference: this.id,
+                  description: `Torneo ${this.code || this.id} finalizado. Sin premio.`,
+                },
+              });
+              console.log(
+                `✅ Fin de torneo registrado en DB para jugador ${player.id} (sin premio)`,
+              );
+            } catch (dbError) {
+              console.error(`❌ Error guardando fin de torneo en DB para ${playerId}:`, dbError);
+            }
 
             if (player.socket) {
               player.socket.emit("tournament-prize-awarded", {
-                prize,
-                message:
-                  prize > 0
-                    ? `🎉 ¡Ganaste ${prize.toLocaleString()} fichas!`
-                    : "No ganaste premio esta vez.",
+                prize: 0,
+                message: "No ganaste premio esta vez.",
               });
             }
           }
-        });
+        }
 
         gameManager.notifyAdminsRoomUpdate();
 
@@ -417,28 +576,25 @@ export class TournamentRoom {
             player.socket.emit("tournament-ended", {
               reason: "finished",
               message: "¡Torneo finalizado! Puedes revisar los resultados y salir cuando quieras.",
-              shouldNavigateToResults: true, // Flag para navegación en frontend
+              shouldNavigateToResults: true,
             });
           }
         });
 
         console.log(`✅ [Torneo] Resultados emitidos. Clientes permanecen conectados.`);
 
-        // Limpieza del servidor después de 5 minutos (fallback)
-        // Los clientes pueden quedarse más tiempo, pero el servidor limpia recursos
         const cleanupTimeoutId = setTimeout(() => {
           console.log(
             `🧹 [Torneo] Iniciando limpieza de recursos del servidor (sala ${this.id})...`,
           );
 
-          // Solo limpiar recursos del servidor, NO forzar desconexión de clientes
           gameManager.removeRoom(this.id);
           this.destroy();
 
           console.log(
             `🗑️ [Torneo] Sala ${this.id} limpiada del servidor. Clientes pueden seguir viendo resultados.`,
           );
-        }, 300000); // 5 minutos = 300000ms
+        }, 300000);
 
         this.timeouts.push(cleanupTimeoutId);
         return;
@@ -627,9 +783,18 @@ export class TournamentRoom {
 
   async saveTournamentToDB() {
     try {
-      const tournament = await prisma.tournament.create({
-        data: {
+      const tournament = await prisma.tournament.upsert({
+        where: { id: this.id },
+        update: {
+          rounds: this.maxRounds,
+          currentRound: this.currentRound,
+          status: "COMPLETED",
+          results: this.roundResults,
+        },
+        create: {
           id: this.id,
+          code: this.code,
+          entryFee: this.entryFee,
           rounds: this.maxRounds,
           currentRound: this.currentRound,
           status: "COMPLETED",
@@ -637,7 +802,9 @@ export class TournamentRoom {
           createdAt: new Date(),
         },
       });
-      console.log(`✅ Torneo guardado en DB: ${tournament.id}`);
+      console.log(
+        `✅ Torneo guardado/actualizado en DB: ${tournament.id} (código: ${tournament.code}, fee: ${tournament.entryFee})`,
+      );
     } catch (err) {
       console.error(`❌ Error guardando torneo ${this.id}:`, err);
     }
@@ -645,6 +812,9 @@ export class TournamentRoom {
 
   async saveRoundToDB(player, playerId, totalBetAmount, totalWinnings, betResults, winningNumber) {
     try {
+      const tournamentBalanceAfter = player.tournamentBalance;
+      const tournamentBalanceBefore = tournamentBalanceAfter - totalWinnings + totalBetAmount;
+
       await prisma.rouletteRound.create({
         data: {
           playerId: player.id,
@@ -657,8 +827,8 @@ export class TournamentRoom {
           totalWinnings,
           netResult: totalWinnings - totalBetAmount,
           betResults,
-          playerBalanceBefore: player.balance - totalWinnings + totalBetAmount,
-          playerBalanceAfter: player.balance,
+          playerBalanceBefore: tournamentBalanceBefore,
+          playerBalanceAfter: tournamentBalanceAfter,
           currency: player.currency || "ARS",
           ipAddress: player.ip || "unknown",
           provider: "tournament",
@@ -666,6 +836,10 @@ export class TournamentRoom {
           description: `Ronda ${this.currentRound} de torneo. Número: ${winningNumber.number}`,
         },
       });
+
+      console.log(
+        `✅ Ronda guardada en DB para jugador ${playerId} - Balance torneo: ${tournamentBalanceBefore} → ${tournamentBalanceAfter}`,
+      );
     } catch (err) {
       console.error(`❌ Error guardando ronda para ${playerId} en torneo:`, err);
     }
