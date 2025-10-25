@@ -173,63 +173,60 @@ export const singlePlayerHandler = (io, socket) => {
     }
   });
 
- socket.on("leave-room", ({ roomId, userId }) => {
-  console.log(`🚪 [singlePlayerHandler] Jugador ${userId} solicitó salir de sala ${roomId}`);
-  
-  if (!roomId || !userId) {
-    console.warn("⚠️ [singlePlayerHandler] leave-room: faltan roomId o userId");
-    return; // No emitir error, dejar que otro handler lo maneje
-  }
+  socket.on("leave-room", ({ roomId, userId }) => {
+    console.log(`🚪 [singlePlayerHandler] Jugador ${userId} solicitó salir de sala ${roomId}`);
 
-  const room = gameManager.getRoom(roomId);
-  
-  // Verificar si es una sala single player (no es TournamentRoom)
-  if (!room) {
-    console.warn(`⚠️ [singlePlayerHandler] Sala ${roomId} no encontrada`);
-    // Aún así, limpiar el socket del lado del cliente
+    if (!roomId || !userId) {
+      console.warn("⚠️ [singlePlayerHandler] leave-room: faltan roomId o userId");
+      return;
+    }
+
+    const room = gameManager.getRoom(roomId);
+
+    if (!room) {
+      console.warn(`⚠️ [singlePlayerHandler] Sala ${roomId} no encontrada`);
+      if (socket.player && socket.player.id === userId) {
+        delete socket.player;
+      }
+      delete socket.roomId;
+      socket.leave(roomId);
+      return;
+    }
+
+    if (room instanceof TournamentRoom) {
+      console.log(`ℹ️ [singlePlayerHandler] Sala ${roomId} es de torneo, ignorando...`);
+      return;
+    }
+
+    if (typeof room.getPlayer !== "function") {
+      console.warn(`⚠️ [singlePlayerHandler] Sala ${roomId} no es compatible con single player`);
+      return;
+    }
+
+    const player = room.getPlayer(userId);
+
+    if (!player) {
+      console.warn(`⚠️ [singlePlayerHandler] Jugador ${userId} no encontrado en sala ${roomId}`);
+      return;
+    }
+
+    room.removePlayer(userId);
+    console.log(`✅ [singlePlayerHandler] Jugador ${userId} eliminado de sala ${roomId}`);
+
     if (socket.player && socket.player.id === userId) {
       delete socket.player;
+      console.log(`♻️ [singlePlayerHandler] socket.player limpiado para ${userId}`);
     }
     delete socket.roomId;
+    console.log(`♻️ [singlePlayerHandler] socket.roomId limpiado`);
+
     socket.leave(roomId);
-    return;
-  }
+    console.log(`🔌 [singlePlayerHandler] Socket ${socket.id} salió de sala ${roomId}`);
 
-  if (room instanceof TournamentRoom) {
-    console.log(`ℹ️ [singlePlayerHandler] Sala ${roomId} es de torneo, ignorando...`);
-    return; // Dejar que tournamentHandler lo procese
-  }
+    gameManager.notifyAdminsRoomUpdate();
 
-  // Verificar que la sala tenga el método getPlayer (es una sala single player)
-  if (typeof room.getPlayer !== 'function') {
-    console.warn(`⚠️ [singlePlayerHandler] Sala ${roomId} no es compatible con single player`);
-    return;
-  }
-
-  const player = room.getPlayer(userId);
-  
-  if (!player) {
-    console.warn(`⚠️ [singlePlayerHandler] Jugador ${userId} no encontrado en sala ${roomId}`);
-    return;
-  }
-
-  room.removePlayer(userId);
-  console.log(`✅ [singlePlayerHandler] Jugador ${userId} eliminado de sala ${roomId}`);
-
-  if (socket.player && socket.player.id === userId) {
-    delete socket.player;
-    console.log(`♻️ [singlePlayerHandler] socket.player limpiado para ${userId}`);
-  }
-  delete socket.roomId;
-  console.log(`♻️ [singlePlayerHandler] socket.roomId limpiado`);
-
-  socket.leave(roomId);
-  console.log(`🔌 [singlePlayerHandler] Socket ${socket.id} salió de sala ${roomId}`);
-
-  gameManager.notifyAdminsRoomUpdate();
-
-  socket.emit("left-room-success", { message: "Saliste correctamente del juego." });
-});
+    socket.emit("left-room-success", { message: "Saliste correctamente del juego." });
+  });
 
   socket.on("disconnect", () => {
     const roomId = socket.id;

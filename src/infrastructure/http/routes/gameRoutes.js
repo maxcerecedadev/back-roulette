@@ -1,14 +1,10 @@
 // src/infrastructure/http/routes/gameRoutes.js
-import axios from "axios";
 import { Router } from "express";
 import * as gameManager from "#app/managers/gameManager.js";
-import { v4 as uuidv4 } from "uuid";
 import { adminAuth } from "#infra/http/middleware/adminAuth.js";
 import prisma from "#prisma";
 
 const router = Router();
-
-const API_BASE_URL = process.env.CASINO_API_BASE_URL;
 
 /**
  * @swagger
@@ -307,144 +303,6 @@ router.get("/rounds", async (req, res) => {
     res.status(500).json({
       error: "Error interno del servidor",
     });
-  }
-});
-
-/**
- * @swagger
- * /auth/validate-token:
- *   post:
- *     summary: Valida token externo y crea/actualiza usuario
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               token:
- *                 type: string
- *                 description: Token externo
- *           example:
- *             token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
- *     responses:
- *       200:
- *         description: Usuario validado
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 userId:
- *                   type: string
- *                 userName:
- *                   type: string
- *                 balance:
- *                   type: number
- *       400:
- *         description: Token faltante
- *       401:
- *         description: Token inválido
- *       500:
- *         description: Error interno
- */
-router.post("/auth/validate-token", async (req, res) => {
-  const { token } = req.body;
-
-  if (!token) {
-    console.warn("⚠️ [AUTH] No token provided in request body");
-    return res.status(400).json({ error: "Token is required" });
-  }
-
-  try {
-    const response = await axios.post(
-      `${API_BASE_URL}/usuario/ruleta-user-info`,
-      {},
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        timeout: 5000,
-      },
-    );
-
-    const { success, usuario, creditos } = response.data;
-
-    if (!success) {
-      console.warn("❌ [AUTH] External API rejected token ending in:", token.slice(-8));
-      return res.status(401).json({ error: "Token inválido o expirado" });
-    }
-
-    const balance = parseFloat(creditos);
-    if (isNaN(balance)) {
-      console.error("❌ [AUTH] Invalid credit value received:", creditos);
-      return res.status(500).json({ error: "Créditos inválidos del proveedor" });
-    }
-
-    const userName = usuario;
-
-    const user = await prisma.user.upsert({
-      where: { name: userName },
-      update: {
-        name: userName,
-        lastLogin: new Date(),
-        balance: balance,
-        externalToken: token,
-      },
-      create: {
-        id: uuidv4(),
-        name: userName,
-        balance: balance,
-        externalToken: token,
-      },
-    });
-
-    const userId = user.id;
-
-    console.info("✅ [AUTH] User validated successfully:", {
-      userId,
-      userName,
-      externalToken: token.slice(-8),
-    });
-
-    res.json({
-      success: true,
-      userId,
-      userName,
-      balance,
-    });
-  } catch (error) {
-    console.error("💥 [AUTH] Error calling external API:", {
-      message: error.message,
-      code: error.code,
-      status: error.response?.status,
-    });
-
-    if (error.response?.status === 401) {
-      console.warn("🔒 [AUTH] 401 Unauthorized — Token rejected by external service");
-      return res.status(401).json({ error: "Token inválido o expirado" });
-    }
-
-    if (error.code === "ECONNABORTED") {
-      console.error("⏳ [AUTH] Timeout connecting to external service");
-      return res.status(504).json({
-        error: "Tiempo de espera agotado al conectar con el proveedor",
-      });
-    }
-
-    if (error.code === "ENOTFOUND" || error.code === "EAI_AGAIN") {
-      console.error("🌐 [AUTH] DNS or network issue reaching external service");
-      return res.status(502).json({
-        error: "No se puede contactar con el proveedor de usuarios",
-      });
-    }
-
-    console.error("🚨 [AUTH] Unexpected validation error", error);
-    res.status(500).json({ error: "Error interno del servidor al validar usuario" });
   }
 });
 

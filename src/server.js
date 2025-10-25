@@ -1,10 +1,11 @@
 // src/server.js
-
 import express from "express";
 import cors from "cors";
 import { createServer } from "node:http";
 import { Server as SocketServer } from "socket.io";
 import { config } from "dotenv";
+import axios from "axios";
+import { v4 as uuidv4 } from "uuid";
 import prisma from "#prisma";
 import { singlePlayerHandler } from "#infra/ws/singlePlayerHandler.js";
 import { tournamentHandler } from "#infra/ws/tournamentHandler.js";
@@ -15,6 +16,7 @@ import { specs, swaggerUi } from "../docs/swagger.js";
 config();
 
 const PORT = process.env.PORT || 2000;
+const API_BASE_URL = process.env.CASINO_API_BASE_URL;
 
 const app = express();
 app.use(cors());
@@ -30,51 +32,239 @@ const io = new SocketServer(server, {
 });
 
 app.use("/api/v1", routes);
-
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
+app.get("/", (req, res) => res.redirect("/api-docs"));
 
-app.get("/", (req, res) => {
-  res.redirect("/api-docs");
+// =============== CONTROL ESTRICTO: 1 TOKEN = 1 PESTAÑA ===============
+
+const activeSessions = new Map(); // token -> { socketId, connectedAt, userName }
+const pendingConnections = new Map(); // token -> Promise (evita race conditions)
+const disconnectCooldown = new Map(); // token -> timestamp
+
+const COOLDOWN_DURATION = 3000; // 3 segundos antes de permitir reconexión
+
+// Limpiar cooldowns expirados
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, timestamp] of disconnectCooldown.entries()) {
+    if (now - timestamp > COOLDOWN_DURATION) {
+      disconnectCooldown.delete(token);
+    }
+  }
+}, 2000);
+
+// =============== MIDDLEWARE DE AUTENTICACIÓN ===============
+
+io.use(async (socket, next) => {
+  const token = socket.handshake.auth?.token;
+  const adminToken = socket.handshake.auth?.adminToken;
+
+  // 1️⃣ Verificar si es admin
+  if (adminToken === process.env.ADMIN_TOKEN) {
+    socket.data.isAdmin = true;
+    console.log("✅ Admin autenticado:", socket.id);
+    return next();
+  }
+
+  // 2️⃣ Verificar token de usuario
+  if (!token) {
+    console.warn("❌ Conexión rechazada: No token provided");
+    return next(new Error("Token requerido"));
+  }
+
+  // 3️⃣ Verificar cooldown
+  if (disconnectCooldown.has(token)) {
+    const disconnectedAt = disconnectCooldown.get(token);
+    const timeSince = Date.now() - disconnectedAt;
+    const remaining = Math.ceil((COOLDOWN_DURATION - timeSince) / 1000);
+
+    if (remaining > 0) {
+      console.warn(`⏳ Reconexión bloqueada temporalmente: ${token.slice(-8)} (${remaining}s)`);
+      return next(new Error(`Por favor espera ${remaining} segundos antes de reconectar`));
+    } else {
+      // Cooldown expirado, limpiar
+      disconnectCooldown.delete(token);
+    }
+  }
+
+  // 4️⃣ Verificar si ya hay una conexión pendiente
+  if (pendingConnections.has(token)) {
+    console.warn(`⚠️ Conexión simultánea detectada para token: ${token.slice(-8)}`);
+    return next(
+      new Error("Ya hay una conexión en proceso para este usuario. Usa solo una pestaña."),
+    );
+  }
+
+  // 5️⃣ Crear lock para esta conexión
+  const connectionLock = (async () => {
+    try {
+      // Verificar si ya existe una sesión activa
+      if (activeSessions.has(token)) {
+        const existingSession = activeSessions.get(token);
+        const oldSocket = io.sockets.sockets.get(existingSession.socketId);
+
+        console.warn(`🚫 Intento de conexión múltiple detectado para: ${existingSession.userName}`);
+        console.log(`   └─ Socket existente: ${existingSession.socketId}`);
+        console.log(`   └─ Nuevo intento: ${socket.id}`);
+
+        // Desconectar el socket anterior
+        if (oldSocket && oldSocket.connected) {
+          oldSocket.emit("session:force-close", {
+            message: "Se detectó una nueva conexión. Esta sesión será cerrada.",
+            reason: "multiple_tabs",
+            allowReconnect: false,
+          });
+          oldSocket.disconnect(true);
+        }
+
+        // Agregar cooldown, limpiar sesión y RECHAZAR la nueva conexión
+        disconnectCooldown.set(token, Date.now());
+        activeSessions.delete(token);
+
+        throw new Error(
+          "Se detectó uso de múltiples pestañas. Por favor espera 3 segundos y usa solo una pestaña.",
+        );
+      }
+
+      // Validar token con servicio externo
+      const response = await axios.post(
+        `${API_BASE_URL}/usuario/ruleta-user-info`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          timeout: 5000,
+        },
+      );
+
+      const { success, usuario, creditos } = response.data;
+
+      if (!success) {
+        throw new Error("Token inválido o expirado");
+      }
+
+      const balance = parseFloat(creditos);
+      if (isNaN(balance)) {
+        throw new Error("Datos de usuario inválidos");
+      }
+
+      // Crear/actualizar usuario en DB
+      const user = await prisma.user.upsert({
+        where: { name: usuario },
+        update: {
+          name: usuario,
+          lastLogin: new Date(),
+          balance: balance,
+          externalToken: token,
+        },
+        create: {
+          id: uuidv4(),
+          name: usuario,
+          balance: balance,
+          externalToken: token,
+        },
+      });
+
+      // Adjuntar datos al socket
+      socket.data.userId = user.id;
+      socket.data.userName = user.name;
+      socket.data.balance = user.balance;
+      socket.data.token = token;
+
+      // Registrar como sesión activa
+      activeSessions.set(token, {
+        socketId: socket.id,
+        connectedAt: Date.now(),
+        userName: user.name,
+      });
+
+      console.log(`✅ Usuario autenticado: ${user.name} (${user.id}) - Socket: ${socket.id}`);
+
+      return true;
+    } finally {
+      // ========== IMPORTANTE: SIEMPRE limpiar el lock ==========
+      pendingConnections.delete(token);
+    }
+  })();
+
+  // Registrar el lock
+  pendingConnections.set(token, connectionLock);
+
+  try {
+    await connectionLock;
+    next();
+  } catch (error) {
+    console.error("💥 Error en autenticación:", error.message);
+
+    if (error.message.includes("múltiples pestañas")) {
+      console.log(`🔒 Conexión bloqueada: ${token.slice(-8)}`);
+    }
+
+    // Asegurar que el lock se limpió
+    pendingConnections.delete(token);
+
+    next(error instanceof Error ? error : new Error("Error al validar usuario"));
+  }
 });
 
-// =============== CONFIGURACIÓN DE SOCKET.IO ===============
+// =============== MANEJADORES DE SOCKET.IO ===============
 
 io.on("connection", (socket) => {
-  console.log("🔌 Nuevo cliente conectado:", socket.id);
-
-  const adminToken = socket.handshake.auth?.adminToken;
-  if (adminToken === process.env.ADMIN_TOKEN) {
+  // 🔒 Admin flow
+  if (socket.data.isAdmin) {
     socket.join("admin-room");
-    console.log("✅ Admin conectado:", socket.id);
+    console.log("✅ Admin conectado a admin-room:", socket.id);
     socket.emit("admin:rooms-update", getRooms());
     return;
   }
 
-  tournamentHandler(io, socket);
+  // 👤 Usuario normal - ya autenticado
+  console.log(`🔌 Usuario conectado: ${socket.data.userName} (${socket.id})`);
 
+  // Enviar datos de sesión al cliente
+  socket.emit("session", {
+    userId: socket.data.userId,
+    userName: socket.data.userName,
+    balance: socket.data.balance,
+  });
+
+  // Esperar selección de modo
   socket.on("join-mode", (mode, callback) => {
-    console.log(`🎯 [server] join-mode recibido: ${mode}`);
+    console.log(`🎯 ${socket.data.userName} seleccionó modo: ${mode}`);
 
     if (mode === "single") {
       singlePlayerHandler(io, socket);
-      if (callback && typeof callback === "function") {
-        callback({ success: true });
-      }
+      callback?.({ success: true });
     } else if (mode === "tournament") {
-      if (callback && typeof callback === "function") {
-        callback({ success: true });
-      }
+      tournamentHandler(io, socket);
+      callback?.({ success: true });
     } else {
-      if (callback && typeof callback === "function") {
-        callback({ error: "Modo no soportado" });
-      }
+      console.warn(`⚠️ Modo inválido: ${mode}`);
+      callback?.({ error: "Modo no soportado" });
       socket.emit("error", { message: "Modo no soportado" });
       socket.disconnect(true);
     }
   });
 
-  socket.on("disconnect", () => {
-    console.log("🔌 Cliente desconectado:", socket.id);
+  socket.on("disconnect", (reason) => {
+    console.log(`🔌 ${socket.data.userName} desconectado (razón: ${reason})`);
+
+    if (socket.data.token) {
+      const session = activeSessions.get(socket.data.token);
+
+      // Solo limpiar si es el socket actual
+      if (session && session.socketId === socket.id) {
+        activeSessions.delete(socket.data.token);
+        console.log(`🗑️ Sesión liberada: ${socket.data.token.slice(-8)}`);
+
+        // Si fue desconexión limpia, no agregar cooldown
+        if (reason === "client namespace disconnect" || reason === "transport close") {
+          console.log(`✅ Desconexión limpia, token disponible inmediatamente`);
+        }
+      }
+    }
   });
 });
 
@@ -89,8 +279,11 @@ async function startServer() {
 
     server.listen(PORT, () => {
       console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
-      console.log(`Swagger docs disponible en http://localhost:${PORT}/api-docs`);
-      console.log(`📡 Socket.IO escuchando conexiones`);
+      console.log(`📖 Swagger docs: http://localhost:${PORT}/api-docs`);
+      console.log(`📡 Socket.IO escuchando con autenticación`);
+      console.log(`🔐 Modo: 1 TOKEN = 1 PESTAÑA (conexiones múltiples bloqueadas)`);
+      console.log(`🔒 Protección anti-race condition: ACTIVADA`);
+      console.log(`⏳ Cooldown de reconexión: ${COOLDOWN_DURATION / 1000}s`);
     });
   } catch (error) {
     console.error("❌ Error al iniciar el servidor:", error);
@@ -98,10 +291,13 @@ async function startServer() {
   }
 }
 
-// =============== MANEJO DE CIERRE GRACEFUL ===============
-
 async function shutdown() {
   try {
+    activeSessions.clear();
+    pendingConnections.clear();
+    disconnectCooldown.clear();
+    console.log("🧹 Sesiones activas limpiadas");
+
     await prisma.$disconnect();
     console.log("🔌 Base de datos desconectada");
   } catch (error) {

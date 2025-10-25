@@ -228,22 +228,104 @@ export const tournamentHandler = (io, socket) => {
 
   socket.on("tournament:list-active", (callback) => {
     console.log("📥 [tournamentHandler] Cliente solicitó lista de torneos activos");
+    console.log(`🔌 [tournamentHandler] Socket ID: ${socket.id}`);
+    console.log(`👤 [tournamentHandler] Player ID: ${socket.player?.id || "No player"}`);
+
     try {
-      const activeTournaments = getActiveTournamentRooms().map(([roomId, room]) => {
-        console.log(roomId);
-        return room.getPublicInfo();
-      });
+      const rooms = getActiveTournamentRooms();
+      console.log(`🔍 [tournamentHandler] Se encontraron ${rooms.length} salas de torneo`);
+
+      if (rooms.length === 0) {
+        console.log(`ℹ️ [tournamentHandler] No hay torneos activos, devolviendo array vacío`);
+        if (callback) {
+          callback({ tournaments: [] });
+          console.log(`✅ [tournamentHandler] Callback ejecutado con array vacío`);
+        }
+        return;
+      }
+
+      const activeTournaments = rooms
+        .map(([roomId, room]) => {
+          console.log(`📝 [tournamentHandler] Procesando sala ${roomId}`);
+
+          try {
+            const info = room.getPublicInfo();
+            console.log(`✅ [tournamentHandler] Info de sala ${roomId}:`, {
+              id: info.id,
+              code: info.code,
+              players: `${info.players}/${info.maxPlayers}`,
+              status: info.status,
+              isStarted: info.isStarted,
+            });
+
+            // Intentar serializar para detectar problemas
+            try {
+              JSON.stringify(info);
+              console.log(`✅ [tournamentHandler] Sala ${roomId} es serializable`);
+            } catch (jsonError) {
+              console.error(
+                `❌ [tournamentHandler] Sala ${roomId} NO es serializable:`,
+                jsonError.message,
+              );
+              // Intentar crear versión serializable
+              return {
+                ...info,
+                createdAt: info.createdAt ? info.createdAt.toISOString() : new Date().toISOString(),
+              };
+            }
+
+            return info;
+          } catch (error) {
+            console.error(
+              `❌ [tournamentHandler] Error obteniendo info de sala ${roomId}:`,
+              error.message,
+            );
+            console.error(`Stack:`, error.stack);
+            return null;
+          }
+        })
+        .filter(Boolean); // Filtrar nulls
 
       console.log(
         `📋 [tournamentHandler] Enviando ${activeTournaments.length} torneos activos al cliente.`,
       );
+
+      // Intentar serializar el resultado completo
+      try {
+        const serialized = JSON.stringify({ tournaments: activeTournaments });
+        console.log(
+          `✅ [tournamentHandler] Payload serializable (${serialized.length} caracteres)`,
+        );
+      } catch (jsonError) {
+        console.error(`❌ [tournamentHandler] Payload NO es serializable:`, jsonError.message);
+      }
+
       if (callback) {
-        callback({ tournaments: activeTournaments });
+        try {
+          callback({ tournaments: activeTournaments });
+          console.log(
+            `✅ [tournamentHandler] Callback ejecutado exitosamente con ${activeTournaments.length} torneos`,
+          );
+        } catch (callbackError) {
+          console.error(`❌ [tournamentHandler] Error ejecutando callback:`, callbackError.message);
+        }
+      } else {
+        console.warn("⚠️ [tournamentHandler] No se proporcionó callback en tournament:list-active");
       }
     } catch (error) {
-      console.error("❌ [tournamentHandler] Error obteniendo torneos activos:", error);
+      console.error("❌ [tournamentHandler] Error obteniendo torneos activos:", error.message);
+      console.error("Stack completo:", error.stack);
+
       if (callback) {
-        callback({ error: "Error interno al obtener torneos activos" });
+        try {
+          callback({ error: "Error interno al obtener torneos activos" });
+          console.log(`📤 [tournamentHandler] Callback ejecutado con error`);
+        } catch (callbackError) {
+          console.error(
+            `❌ [tournamentHandler] Error ejecutando callback de error:`,
+            callbackError.message,
+          );
+        }
       }
     }
   });

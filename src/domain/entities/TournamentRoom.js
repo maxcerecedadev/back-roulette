@@ -72,19 +72,29 @@ export class TournamentRoom {
    * @returns {Object} Información pública del torneo.
    */
   getPublicInfo() {
-    return {
-      id: this.id,
-      code: this.code,
-      players: this.players.size,
-      maxPlayers: 3,
-      createdAt: this.createdAt,
-      status: mapGameStateToTournamentStatus(this.gameState, this.players.size),
-      isStarted: this.isStarted,
-      currentRound: this.currentRound,
-      maxRounds: this.maxRounds,
-      gameState: this.gameState,
-      entryChips: this.entryFee,
-    };
+    console.log(`[TournamentRoom] Generando info pública para sala ${this.id}`);
+
+    try {
+      const info = {
+        id: this.id,
+        code: this.code,
+        players: this.players.size,
+        maxPlayers: 3,
+        createdAt: this.createdAt ? this.createdAt.toISOString() : new Date().toISOString(), // ← Serializar fecha
+        status: mapGameStateToTournamentStatus(this.gameState, this.players.size),
+        isStarted: this.isStarted,
+        currentRound: this.currentRound,
+        maxRounds: this.maxRounds,
+        gameState: this.gameState,
+        entryChips: this.entryFee,
+      };
+
+      console.log(`[TournamentRoom] Info generada:`, info);
+      return info;
+    } catch (error) {
+      console.error(`[TournamentRoom] Error generando info pública:`, error);
+      throw error;
+    }
   }
 
   /**
