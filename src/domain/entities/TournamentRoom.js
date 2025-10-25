@@ -47,7 +47,7 @@ export class TournamentRoom {
     this.lastBets = new Map();
     this.gameState = GAME_STATES.BETTING;
     this.currentRound = 1;
-    this.maxRounds = 2; //! Máximo número de rondas
+    this.maxRounds = 10; //! Máximo número de rondas
     this.timeRemaining = 30; //!! 60s Luego
     this.manualMode = false;
     this.rouletteEngine = new RouletteEngine(20);
