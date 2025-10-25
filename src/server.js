@@ -11,6 +11,7 @@ import { singlePlayerHandler } from "#infra/ws/singlePlayerHandler.js";
 import { tournamentHandler } from "#infra/ws/tournamentHandler.js";
 import routes from "#infra/http/routes/index.js";
 import { initGameManager, getRooms } from "./application/managers/gameManager.js";
+import * as gameManager from "./application/managers/gameManager.js";
 import { specs, swaggerUi } from "../docs/swagger.js";
 
 config();
@@ -82,7 +83,6 @@ io.use(async (socket, next) => {
       console.warn(`⏳ Reconexión bloqueada temporalmente: ${token.slice(-8)} (${remaining}s)`);
       return next(new Error(`Por favor espera ${remaining} segundos antes de reconectar`));
     } else {
-      // Cooldown expirado, limpiar
       disconnectCooldown.delete(token);
     }
   }
@@ -107,7 +107,6 @@ io.use(async (socket, next) => {
         console.log(`   └─ Socket existente: ${existingSession.socketId}`);
         console.log(`   └─ Nuevo intento: ${socket.id}`);
 
-        // Desconectar el socket anterior
         if (oldSocket && oldSocket.connected) {
           oldSocket.emit("session:force-close", {
             message: "Se detectó una nueva conexión. Esta sesión será cerrada.",
@@ -117,7 +116,6 @@ io.use(async (socket, next) => {
           oldSocket.disconnect(true);
         }
 
-        // Agregar cooldown, limpiar sesión y RECHAZAR la nueva conexión
         disconnectCooldown.set(token, Date.now());
         activeSessions.delete(token);
 
@@ -184,12 +182,10 @@ io.use(async (socket, next) => {
 
       return true;
     } finally {
-      // ========== IMPORTANTE: SIEMPRE limpiar el lock ==========
       pendingConnections.delete(token);
     }
   })();
 
-  // Registrar el lock
   pendingConnections.set(token, connectionLock);
 
   try {
@@ -202,9 +198,7 @@ io.use(async (socket, next) => {
       console.log(`🔒 Conexión bloqueada: ${token.slice(-8)}`);
     }
 
-    // Asegurar que el lock se limpió
     pendingConnections.delete(token);
-
     next(error instanceof Error ? error : new Error("Error al validar usuario"));
   }
 });
@@ -230,7 +224,45 @@ io.on("connection", (socket) => {
     balance: socket.data.balance,
   });
 
-  // Esperar selección de modo
+  // ==================== EVENTOS DE CONSULTA (sin estado) ====================
+  
+  socket.on("tournament:list-active", (callback) => {
+    console.log(`📋 [Server] ${socket.data.userName} consulta torneos disponibles`);
+    
+    try {
+      const activeTournaments = [];
+      const tournamentRooms = getRooms().tournament || [];
+      
+      console.log(`🔍 [Server] Encontradas ${tournamentRooms.length} salas de torneo`);
+      
+      for (const roomId of tournamentRooms) {
+        try {
+          const room = gameManager.getRoom(roomId);
+          if (room && typeof room.getPublicInfo === 'function') {
+            const info = room.getPublicInfo();
+            activeTournaments.push(info);
+            console.log(`✅ [Server] Sala ${roomId}: ${info.players}/${info.maxPlayers} jugadores, estado: ${info.status}`);
+          }
+        } catch (error) {
+          console.error(`❌ [Server] Error obteniendo info de sala ${roomId}:`, error.message);
+        }
+      }
+
+      console.log(`📤 [Server] Enviando ${activeTournaments.length} torneos al cliente`);
+      
+      if (callback) {
+        callback({ tournaments: activeTournaments });
+      }
+    } catch (error) {
+      console.error("❌ [Server] Error en tournament:list-active:", error);
+      if (callback) {
+        callback({ error: "Error al obtener torneos" });
+      }
+    }
+  });
+
+  // ==================== EVENTOS DE INTERACCIÓN (con estado) ====================
+  
   socket.on("join-mode", (mode, callback) => {
     console.log(`🎯 ${socket.data.userName} seleccionó modo: ${mode}`);
 
@@ -254,12 +286,10 @@ io.on("connection", (socket) => {
     if (socket.data.token) {
       const session = activeSessions.get(socket.data.token);
 
-      // Solo limpiar si es el socket actual
       if (session && session.socketId === socket.id) {
         activeSessions.delete(socket.data.token);
         console.log(`🗑️ Sesión liberada: ${socket.data.token.slice(-8)}`);
 
-        // Si fue desconexión limpia, no agregar cooldown
         if (reason === "client namespace disconnect" || reason === "transport close") {
           console.log(`✅ Desconexión limpia, token disponible inmediatamente`);
         }
@@ -270,7 +300,6 @@ io.on("connection", (socket) => {
 
 initGameManager(io);
 
-// =============== INICIO DEL SERVIDOR ===============
 
 async function startServer() {
   try {
