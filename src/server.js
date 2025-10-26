@@ -36,15 +36,12 @@ app.use("/api/v1", routes);
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
 app.get("/", (req, res) => res.redirect("/api-docs"));
 
-// =============== CONTROL ESTRICTO: 1 TOKEN = 1 PESTAÑA ===============
+const activeSessions = new Map();
+const pendingConnections = new Map();
+const disconnectCooldown = new Map();
 
-const activeSessions = new Map(); // token -> { socketId, connectedAt, userName }
-const pendingConnections = new Map(); // token -> Promise (evita race conditions)
-const disconnectCooldown = new Map(); // token -> timestamp
+const COOLDOWN_DURATION = 3000;
 
-const COOLDOWN_DURATION = 3000; // 3 segundos antes de permitir reconexión
-
-// Limpiar cooldowns expirados
 setInterval(() => {
   const now = Date.now();
   for (const [token, timestamp] of disconnectCooldown.entries()) {
@@ -54,26 +51,21 @@ setInterval(() => {
   }
 }, 2000);
 
-// =============== MIDDLEWARE DE AUTENTICACIÓN ===============
-
 io.use(async (socket, next) => {
   const token = socket.handshake.auth?.token;
   const adminToken = socket.handshake.auth?.adminToken;
 
-  // 1️⃣ Verificar si es admin
   if (adminToken === process.env.ADMIN_TOKEN) {
     socket.data.isAdmin = true;
     console.log("✅ Admin autenticado:", socket.id);
     return next();
   }
 
-  // 2️⃣ Verificar token de usuario
   if (!token) {
     console.warn("❌ Conexión rechazada: No token provided");
     return next(new Error("Token requerido"));
   }
 
-  // 3️⃣ Verificar cooldown
   if (disconnectCooldown.has(token)) {
     const disconnectedAt = disconnectCooldown.get(token);
     const timeSince = Date.now() - disconnectedAt;
@@ -87,7 +79,6 @@ io.use(async (socket, next) => {
     }
   }
 
-  // 4️⃣ Verificar si ya hay una conexión pendiente
   if (pendingConnections.has(token)) {
     console.warn(`⚠️ Conexión simultánea detectada para token: ${token.slice(-8)}`);
     return next(
@@ -95,10 +86,8 @@ io.use(async (socket, next) => {
     );
   }
 
-  // 5️⃣ Crear lock para esta conexión
   const connectionLock = (async () => {
     try {
-      // Verificar si ya existe una sesión activa
       if (activeSessions.has(token)) {
         const existingSession = activeSessions.get(token);
         const oldSocket = io.sockets.sockets.get(existingSession.socketId);
@@ -124,7 +113,6 @@ io.use(async (socket, next) => {
         );
       }
 
-      // Validar token con servicio externo
       const response = await axios.post(
         `${API_BASE_URL}/usuario/ruleta-user-info`,
         {},
@@ -148,7 +136,6 @@ io.use(async (socket, next) => {
         throw new Error("Datos de usuario inválidos");
       }
 
-      // Crear/actualizar usuario en DB
       const user = await prisma.user.upsert({
         where: { name: usuario },
         update: {
@@ -165,20 +152,16 @@ io.use(async (socket, next) => {
         },
       });
 
-      // Adjuntar datos al socket
       socket.data.userId = user.id;
       socket.data.userName = user.name;
       socket.data.balance = user.balance;
       socket.data.token = token;
 
-      // Registrar como sesión activa
       activeSessions.set(token, {
         socketId: socket.id,
         connectedAt: Date.now(),
         userName: user.name,
       });
-
-      console.log(`✅ Usuario autenticado: ${user.name} (${user.id}) - Socket: ${socket.id}`);
 
       return true;
     } finally {
@@ -203,10 +186,7 @@ io.use(async (socket, next) => {
   }
 });
 
-// =============== MANEJADORES DE SOCKET.IO ===============
-
 io.on("connection", (socket) => {
-  // 🔒 Admin flow
   if (socket.data.isAdmin) {
     socket.join("admin-room");
     console.log("✅ Admin conectado a admin-room:", socket.id);
@@ -214,55 +194,67 @@ io.on("connection", (socket) => {
     return;
   }
 
-  // 👤 Usuario normal - ya autenticado
-  console.log(`🔌 Usuario conectado: ${socket.data.userName} (${socket.id})`);
-
-  // Enviar datos de sesión al cliente
   socket.emit("session", {
     userId: socket.data.userId,
     userName: socket.data.userName,
     balance: socket.data.balance,
   });
 
-  // ==================== EVENTOS DE CONSULTA (sin estado) ====================
-  
   socket.on("tournament:list-active", (callback) => {
-    console.log(`📋 [Server] ${socket.data.userName} consulta torneos disponibles`);
-    
     try {
+      const rooms = getRooms();
+
       const activeTournaments = [];
-      const tournamentRooms = getRooms().tournament || [];
-      
-      console.log(`🔍 [Server] Encontradas ${tournamentRooms.length} salas de torneo`);
-      
-      for (const roomId of tournamentRooms) {
-        try {
-          const room = gameManager.getRoom(roomId);
-          if (room && typeof room.getPublicInfo === 'function') {
-            const info = room.getPublicInfo();
-            activeTournaments.push(info);
-            console.log(`✅ [Server] Sala ${roomId}: ${info.players}/${info.maxPlayers} jugadores, estado: ${info.status}`);
+
+      if (Array.isArray(rooms)) {
+        const tournamentRooms = rooms.filter((room) => room.roomType === "tournament");
+
+        for (const roomData of tournamentRooms) {
+          try {
+            const room = gameManager.getRoom(roomData.id);
+
+            if (room && typeof room.getPublicInfo === "function") {
+              const info = room.getPublicInfo();
+              activeTournaments.push(info);
+              console.log(`   ✅ ${info.code}: ${info.players}/${info.maxPlayers} jugadores`);
+            } else {
+              console.warn(`   ⚠️ Sala existe pero NO tiene getPublicInfo()`);
+            }
+          } catch (error) {
+            console.error(`   ❌ Error en sala ${roomData.id.slice(0, 8)}...:`, error.message);
           }
-        } catch (error) {
-          console.error(`❌ [Server] Error obteniendo info de sala ${roomId}:`, error.message);
+        }
+      } else {
+        const tournamentIds = rooms.tournament || [];
+
+        for (const roomId of tournamentIds) {
+          try {
+            const room = gameManager.getRoom(roomId);
+            if (room && typeof room.getPublicInfo === "function") {
+              const info = room.getPublicInfo();
+              activeTournaments.push(info);
+              console.log(`   ✅ ${info.code}: ${info.players}/${info.maxPlayers} jugadores`);
+            }
+          } catch (error) {
+            console.error(`   ❌ Error en sala ${roomId.slice(0, 8)}...:`, error.message);
+          }
         }
       }
 
-      console.log(`📤 [Server] Enviando ${activeTournaments.length} torneos al cliente`);
-      
       if (callback) {
         callback({ tournaments: activeTournaments });
+      } else {
+        console.warn("⚠️ No hay callback del cliente");
       }
     } catch (error) {
-      console.error("❌ [Server] Error en tournament:list-active:", error);
+      console.error("❌ Error en tournament:list-active:", error);
+      console.error("Stack:", error.stack);
       if (callback) {
         callback({ error: "Error al obtener torneos" });
       }
     }
   });
 
-  // ==================== EVENTOS DE INTERACCIÓN (con estado) ====================
-  
   socket.on("join-mode", (mode, callback) => {
     console.log(`🎯 ${socket.data.userName} seleccionó modo: ${mode}`);
 
@@ -299,7 +291,6 @@ io.on("connection", (socket) => {
 });
 
 initGameManager(io);
-
 
 async function startServer() {
   try {
