@@ -20,7 +20,6 @@ export class CasinoApiService {
 
     const transactionId = `RLT_${uuidv4()}`;
 
-    // ✅ Genera la fecha en la zona horaria definida en .env
     const fecha = formatDateForExternalAPI(new Date(), "yyyy-MM-dd HH:mm:ss");
 
     try {
@@ -105,7 +104,6 @@ export class CasinoApiService {
 
     const transactionId = `WIN_${uuidv4()}`;
 
-    // ✅ Genera la fecha en la zona horaria definida en .env
     const fecha = formatDateForExternalAPI(new Date(), "yyyy-MM-dd HH:mm:ss");
 
     try {

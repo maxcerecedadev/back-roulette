@@ -128,7 +128,7 @@ export class TournamentRoom {
    * @param {Object} data - Datos a enviar.
    */
   broadcast(event, data) {
-    console.log(`📢 [broadcast] Emitiendo evento '${event}' a todos en sala ${this.id}`);
+    console.log(`[broadcast] Emitiendo evento '${event}' a todos en sala ${this.id}`);
     this.server.to(this.id).emit(event, data);
   }
 
@@ -175,7 +175,7 @@ export class TournamentRoom {
     this.totalPot += this.entryFee;
 
     console.log(
-      `🎟️ [TournamentRoom.addPlayer] Jugador ${player.id} (${player.name}) pagó ${this.entryFee} fichas. Balance real restante: ${player.balance}. Balance de torneo: ${player.tournamentBalance}. Poso total: ${this.totalPot}`,
+      `[TournamentRoom.addPlayer] Jugador ${player.id} (${player.name}) pagó ${this.entryFee} fichas. Balance real restante: ${player.balance}. Balance de torneo: ${player.tournamentBalance}. Poso total: ${this.totalPot}`,
     );
 
     try {
@@ -243,7 +243,7 @@ export class TournamentRoom {
 
     this.playablePot = Math.floor(this.totalPot * (1 - this.houseCutPercentage));
     console.log(
-      `💰 [TournamentRoom] Torneo iniciado. Poso total: ${
+      `[TournamentRoom] Torneo iniciado. Poso total: ${
         this.totalPot
       }. Casa: ${this.totalPot - this.playablePot}. Premio: ${this.playablePot}`,
     );
@@ -412,7 +412,7 @@ export class TournamentRoom {
         const finalStandings = this.calculateFinalStandings();
         const prizeDistribution = this.distributePrize(finalStandings);
 
-        // 🔥 LLAMADAS A LA API: Depositar premios a los ganadores
+        // LLAMADAS A LA API: Depositar premios a los ganadores
         for (const { playerId, prize } of prizeDistribution) {
           const player = this.players.get(playerId);
           if (!player) continue;
@@ -434,7 +434,7 @@ export class TournamentRoom {
                 `🏆 [PREMIO] Jugador ${player.name} (${playerId}) ganó ${prize} fichas. Nuevo saldo real: ${player.balance}`,
               );
 
-              // 🔥 EMITIR ACTUALIZACIÓN DE BALANCE AL FRONTEND
+              // EMITIR ACTUALIZACIÓN DE BALANCE AL FRONTEND
               if (player.socket && player.socket.connected) {
                 player.socket.emit("balance-update", {
                   newBalance: player.balance,
@@ -442,11 +442,11 @@ export class TournamentRoom {
                   amount: prize,
                 });
                 console.log(
-                  `📤 [TournamentRoom] Balance actualizado enviado a ${player.name}: ${player.balance}`,
+                  `[TournamentRoom] Balance actualizado enviado a ${player.name}: ${player.balance}`,
                 );
               }
 
-              // 🔥 REGISTRAR EN DB: Transacción de premio
+              // REGISTRAR EN DB: Transacción de premio
               try {
                 await prisma.rouletteRound.create({
                   data: {
@@ -497,8 +497,7 @@ export class TournamentRoom {
               }
             }
           } else {
-            // Sin premio - también sincronizar balance
-            // 🔥 EMITIR BALANCE ACTUAL (sin cambios)
+            // EMITIR BALANCE ACTUAL
             if (player.socket && player.socket.connected) {
               player.socket.emit("balance-update", {
                 newBalance: player.balance,
@@ -506,7 +505,7 @@ export class TournamentRoom {
                 amount: 0,
               });
               console.log(
-                `📤 [TournamentRoom] Balance sincronizado para ${player.name}: ${player.balance}`,
+                `[TournamentRoom] Balance sincronizado para ${player.name}: ${player.balance}`,
               );
             }
 
@@ -563,10 +562,10 @@ export class TournamentRoom {
         });
 
         console.log(
-          `📊 [Torneo] Resultados finales disponibles. Los jugadores pueden salir cuando quieran.`,
+          `[Torneo] Resultados finales disponibles. Los jugadores pueden salir cuando quieran.`,
         );
 
-        // Guardar en DB de forma asíncrona
+        // Guardar en DB
         this.saveTournamentToDB().catch(console.error);
 
         // Cambiar estado a finalizado inmediatamente
@@ -602,7 +601,7 @@ export class TournamentRoom {
           this.destroy();
 
           console.log(
-            `🗑️ [Torneo] Sala ${this.id} limpiada del servidor. Clientes pueden seguir viendo resultados.`,
+            `[Torneo] Sala ${this.id} limpiada del servidor. Clientes pueden seguir viendo resultados.`,
           );
         }, 300000);
 
@@ -618,7 +617,7 @@ export class TournamentRoom {
   spinWheel() {
     this.winningNumber = this.rouletteEngine.getNextWinningNumber();
     console.log(
-      `🎯 [spinWheel] ¡Número ganador de la ronda ${this.currentRound}!: ${this.winningNumber.number} (${this.winningNumber.color})`,
+      `[spinWheel] ¡Número ganador de la ronda ${this.currentRound}!: ${this.winningNumber.number} (${this.winningNumber.color})`,
     );
     this.broadcast("tournament-state-update", this.getTournamentState());
     setTimeout(() => this.nextState(), 8000);
@@ -685,7 +684,7 @@ export class TournamentRoom {
         });
 
         console.log(
-          `📊 [processPayout] Jugador ${playerId} - Apuesta: ${betKey} ($${amount}) → ${
+          `[processPayout] Jugador ${playerId} - Apuesta: ${betKey} ($${amount}) → ${
             isWin ? "✅ GANÓ" : "❌ PERDIÓ"
           } → Ganancia: $${winnings}, Neto: $${netWin}`,
         );
@@ -701,7 +700,7 @@ export class TournamentRoom {
       let resultStatus = playerBets.size === 0 ? "no_bet" : totalWinnings > 0 ? "win" : "lose";
 
       console.log(
-        `💰 [RESULTADO RONDA ${this.currentRound}] Jugador "${player.name}" (${playerId}): 
+        `[RESULTADO RONDA ${this.currentRound}] Jugador "${player.name}" (${playerId}): 
 → Total apostado: $${totalBetAmount}
 → Ganancias totales: $${totalWinnings}
 → Resultado neto: ${totalNetResult >= 0 ? "+" : ""}${totalNetResult}
@@ -955,12 +954,12 @@ export class TournamentRoom {
         totalBet,
       });
       console.log(
-        `📤 [place-bet] Ronda ${this.currentRound} - Emitido 'tournament-bet-placed' a ${playerId}: newBalance=${player.tournamentBalance}, totalBet=${totalBet}`,
+        `[place-bet] Ronda ${this.currentRound} - Emitido 'tournament-bet-placed' a ${playerId}: newBalance=${player.tournamentBalance}, totalBet=${totalBet}`,
       );
     }
 
     console.log(
-      `🎲 [APUESTA] Ronda ${this.currentRound} - Jugador "${player.name}" (${playerId}) apostó $${amount} en "${betKey}". Nuevo balance de torneo: $${player.tournamentBalance}. Total apostado esta ronda: $${totalBet}`,
+      `[APUESTA] Ronda ${this.currentRound} - Jugador "${player.name}" (${playerId}) apostó $${amount} en "${betKey}". Nuevo balance de torneo: $${player.tournamentBalance}. Total apostado esta ronda: $${totalBet}`,
     );
 
     callback?.({ success: true, newBalance: player.tournamentBalance });

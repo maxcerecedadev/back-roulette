@@ -1,3 +1,4 @@
+
 # 🎰 roulette-back v1.0.0
 
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-green?logo=node.js)]()
@@ -11,7 +12,7 @@
 
 ## 🚀 Scripts disponibles
 
-- 📝 `dev`: nodemon
+- 📝 `dev`: node --watch src/server.js
 - 📝 `start`: node src/server.js
 - 📝 `lint`: eslint .
 - 📝 `test`: node --experimental-vm-modules node_modules/jest/bin/jest.js
@@ -57,7 +58,8 @@
 ├── 📂 application
 │   └── 📂 managers
 │       ├── 📄 gameManager.js
-│       └── 📄 index.js
+│       ├── 📄 index.js
+│       └── 📄 userManager.js
 ├── 📂 domain
 │   ├── 📂 entities
 │   │   ├── 📄 Player.js
@@ -75,7 +77,9 @@
 │   │   ├── 📂 middleware
 │   │   │   └── 📄 adminAuth.js
 │   │   └── 📂 routes
-│   │       └── 📄 gameRoutes.js
+│   │       ├── 📄 gameRoutes.js
+│   │       ├── 📄 index.js
+│   │       └── 📄 userRoutes.js
 │   └── 📂 ws
 │       ├── 📄 singlePlayerHandler.js
 │       └── 📄 tournamentHandler.js
@@ -86,6 +90,7 @@
     └── 📄 timezone.js
 ```
 
+
 ```mermaid
 flowchart TD
   A[⚙️ application] --> B[🏛 domain]
@@ -93,6 +98,7 @@ flowchart TD
   C --> D[🛠 shared]
   D --> A
 ```
+
 
 ---
 
@@ -102,10 +108,15 @@ flowchart TD
 - 🌍 `GET /peek/:roomId`
 - 🌍 `DELETE /:roomId`
 - 🌍 `GET /rounds`
-- 🌍 `POST /auth/validate-token`
 - 🌍 `POST /tournament/create`
+- 🌍 `GET /`
+- 🌍 `GET /:id`
+- 🌍 `DELETE /:id`
 
 ---
+
+## 📚 Documentación API
+
 
 ## 📚 Documentación API
 
@@ -114,6 +125,7 @@ flowchart TD
 - 📝 **Formato**: OpenAPI 3.0 (Swagger)
 - 🧾 **Anotaciones**: JSDoc en rutas HTTP
 - 👤 **Desarrollador**: Max Cereceda — [maxcereceda.com](https://maxcereceda.com)
+
 
 ---
 
@@ -148,9 +160,9 @@ flowchart TD
 
 ## 📖 Notas
 
-- 🗄 **ORM**: Prisma
-- 🏗 **Arquitectura**: Clean Architecture
-- 📜 **Logs**: consola (se puede extender a Winston o Pino)
+- 🗄 **ORM**: Prisma  
+- 🏗 **Arquitectura**: Clean Architecture  
+- 📜 **Logs**: consola (se puede extender a Winston o Pino)  
 
 ---
 
